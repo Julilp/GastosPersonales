@@ -93,7 +93,11 @@ export default function Chat() {
       const parsed = Array.isArray(data) ? data : (data?.movimientos ?? [])
       if (!parsed.length) throw new Error('No se encontraron movimientos en el texto.')
 
-      const guardados = await Promise.all(parsed.map(m => crearMovimiento(m)))
+      const guardados = await Promise.all(parsed.map(m => crearMovimiento({
+        ...m,
+        categoria_id: m.categoria_id ?? categoriasFlat[0]?.id,
+        cuenta_id: m.cuenta_id ?? cuentas[0]?.id,
+      })))
       setMsgs(prev => [
         ...prev,
         {

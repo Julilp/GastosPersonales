@@ -56,12 +56,12 @@ Reglas:
 - Todo lo demas = egreso por defecto
 - COMPRA DE DIVISAS: si el usuario dice "compre dolares/usd/verdes" y menciona cuanto gasto en ARS Y cuantos dolares recibio, generar DOS movimientos: (1) egreso en ARS por lo que gasto, (2) ingreso en USD por los dolares que recibio. Mismo principio para venta de dolares (egreso USD + ingreso ARS).
 - SEPARAR bien cada gasto mencionado, aunque esten en una sola oracion larga
-- Para categoria_id y cuenta_id: elegir el mas apropiado de la lista. Si no hay match, usar null
-- Para cuenta_id null, usar la primera cuenta de la lista como default
+- Para categoria_id: elegir el mas apropiado de la lista. Si no hay match, usar el id de la primera categoria de la lista (nunca null)
+- Para cuenta_id: elegir el mas apropiado de la lista. Si no hay match, usar el id de la primera cuenta de la lista (nunca null)
 - fecha: usar fecha_hoy si no se especifica otra
 
 Devuelve UNICAMENTE un JSON valido sin texto adicional:
-{"movimientos":[{"tipo":"egreso|ingreso","monto":number,"moneda":"ARS|USD","descripcion":"string corta descriptiva","categoria_id":number|null,"cuenta_id":number|null,"fecha":"YYYY-MM-DD"}]}`
+{"movimientos":[{"tipo":"egreso|ingreso","monto":number,"moneda":"ARS|USD","descripcion":"string corta descriptiva","categoria_id":number,"cuenta_id":number,"fecha":"YYYY-MM-DD"}]}`
 
   let claudeRes: Response
   try {
