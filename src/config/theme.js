@@ -1,32 +1,44 @@
 export const THEME = {
   colors: {
-    primary: '#818cf8',       // indigo-400
-    primaryDark: '#6366f1',   // indigo-500
-    primaryLight: '#1e1b4b',  // dark indigo bg
-    success: '#4ade80',       // green-400
-    danger: '#f87171',        // red-400
-    warning: '#fbbf24',       // amber-400
-    bg: '#0f172a',            // slate-900
-    surface: '#1e293b',       // slate-800
-    surfaceHover: '#263347',  // slate-750
-    border: '#334155',        // slate-700
-    textPrimary: '#f1f5f9',   // slate-100
-    textSecondary: '#94a3b8', // slate-400
-    textMuted: '#475569',     // slate-500
-    errorBg: '#450a0a',
-    successBg: '#052e16',
-    dangerSoft: '#3b0d0d',
+    bg: '#0f1219',
+    sidebar: 'rgba(139,92,246,0.04)',
+    sidebarBorder: 'rgba(139,92,246,0.1)',
+    surface: 'rgba(139,92,246,0.05)',
+    card: 'rgba(139,92,246,0.06)',
+    cardBorder: 'rgba(139,92,246,0.12)',
+    cardHover: 'rgba(139,92,246,0.1)',
+    text: '#e2e4ec',
+    textPrimary: '#e2e4ec',
+    textSecondary: 'rgba(226,228,236,0.6)',
+    textMuted: 'rgba(226,228,236,0.38)',
+    accent: '#a78bfa',
+    primary: '#a78bfa',
+    primaryDark: '#8b5cf6',
+    primaryLight: 'rgba(167,139,250,0.1)',
+    accentSoft: 'rgba(167,139,250,0.1)',
+    success: '#6ee7b7',
+    danger: '#fca5a5',
+    warning: '#fbbf24',
+    income: '#6ee7b7',
+    expense: '#fca5a5',
+    inputBg: 'rgba(139,92,246,0.05)',
+    inputBorder: 'rgba(139,92,246,0.12)',
+    border: 'rgba(139,92,246,0.12)',
+    errorBg: 'rgba(252,165,165,0.08)',
+    successBg: 'rgba(110,231,183,0.08)',
+    dangerSoft: 'rgba(252,165,165,0.08)',
   },
   radius: {
     sm: '8px',
-    md: '12px',
-    lg: '16px',
-    xl: '24px',
+    md: '10px',
+    lg: '12px',
+    xl: '16px',
     full: '9999px',
   },
   shadow: {
-    sm: '0 1px 3px rgba(0,0,0,0.4)',
-    md: '0 4px 12px rgba(0,0,0,0.4)',
-    lg: '0 8px 24px rgba(0,0,0,0.5)',
+    sm: '0 0 20px rgba(139,92,246,0.04)',
+    md: '0 0 30px rgba(139,92,246,0.06)',
+    lg: '0 0 40px rgba(139,92,246,0.1)',
   },
+  font: "'Space Grotesk', system-ui, sans-serif",
 }

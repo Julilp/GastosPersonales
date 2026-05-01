@@ -3,7 +3,7 @@ import { THEME } from '../config/theme'
 import { APP_CONFIG, formatMoney } from '../config/app.config'
 import {
   getRecurrentes, crearRecurrente, actualizarRecurrente, eliminarRecurrente,
-  getCuotas, crearCuota, eliminarCuota, actualizarCuota,
+  getCuotas, crearCuota, eliminarCuota,
   getCuentas, getCategorias,
 } from '../lib/finanzas'
 import { Repeat2, CreditCard, Trash2, PauseCircle, PlayCircle, ArrowDownRight, ArrowUpRight, X, Plus } from 'lucide-react'
@@ -41,7 +41,7 @@ function FormRecurrente({ cuentas, categorias, inicial, onGuardar, onCancelar, l
           <button key={t} type="button" onClick={() => setTipo(t)} style={{
             ...s.toggleBtn,
             background: tipo === t ? (t === 'egreso' ? THEME.colors.danger : THEME.colors.success) : THEME.colors.surface,
-            color: tipo === t ? '#fff' : THEME.colors.textSecondary,
+            color: tipo === t ? '#fff' : THEME.colors.textMuted,
           }}>
             {t === 'egreso'
               ? <><ArrowDownRight size={15} /> Egreso</>
@@ -188,66 +188,6 @@ function FormCuota({ cuentas, categorias, onGuardar, onCancelar, loading }) {
   )
 }
 
-function ItemRecurrente({ rec, onToggleActivo, onEliminar }) {
-  const color = rec.tipo === 'ingreso' ? THEME.colors.success : THEME.colors.danger
-  const signo = rec.tipo === 'ingreso' ? '+' : '-'
-  return (
-    <div style={s.item}>
-      <span style={s.itemIcon}>{rec.categoria?.icono ?? '📦'}</span>
-      <div style={s.itemInfo}>
-        <span style={s.itemNombre}>{rec.descripcion}</span>
-        <span style={s.itemMeta}>{rec.cuenta?.nombre} · día {rec.dia_del_mes}</span>
-      </div>
-      <span style={{ ...s.itemMonto, color }}>{signo}{formatMoney(rec.monto, rec.moneda)}</span>
-      <div style={s.itemActions}>
-        <button
-          onClick={() => onToggleActivo(rec)}
-          style={{
-            ...s.chipBtn,
-            background: rec.activo ? THEME.colors.primaryLight : THEME.colors.surface,
-            color: rec.activo ? THEME.colors.primary : THEME.colors.textMuted,
-          }}
-          title={rec.activo ? 'Archivar' : 'Activar'}
-        >
-          {rec.activo
-            ? <PauseCircle size={14} />
-            : <PlayCircle size={14} />}
-          {rec.activo ? 'Activo' : 'Pausado'}
-        </button>
-        <button onClick={() => onEliminar(rec)} style={s.deleteSmBtn} title="Eliminar">
-          <Trash2 size={15} color={THEME.colors.textMuted} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ItemCuota({ cuota, onEliminar }) {
-  const restantes = cuota.cantidad_cuotas - cuota.cuotas_pagadas
-  const pct = Math.round((cuota.cuotas_pagadas / cuota.cantidad_cuotas) * 100)
-  return (
-    <div style={s.item}>
-      <span style={s.itemIcon}>{cuota.categoria?.icono ?? '📦'}</span>
-      <div style={{ ...s.itemInfo, gap: '4px' }}>
-        <span style={s.itemNombre}>{cuota.descripcion}</span>
-        <span style={s.itemMeta}>{cuota.cuenta?.nombre} · {cuota.cuotas_pagadas}/{cuota.cantidad_cuotas} cuotas pagadas</span>
-        <div style={s.miniBarFondo}>
-          <div style={{ ...s.miniBarRelleno, width: `${pct}%` }} />
-        </div>
-      </div>
-      <div style={s.itemRight}>
-        <span style={{ ...s.itemMonto, color: THEME.colors.danger }}>
-          -{formatMoney(cuota.monto_cuota, cuota.moneda)}
-        </span>
-        <span style={s.cuotaRest}>{restantes} restantes</span>
-      </div>
-      <button onClick={() => onEliminar(cuota)} style={s.deleteSmBtn} title="Eliminar">
-        <Trash2 size={15} color={THEME.colors.textMuted} />
-      </button>
-    </div>
-  )
-}
-
 function ConfirmSheet({ texto, onConfirmar, onCancelar, loading }) {
   return (
     <div style={s.confirmOverlay} onClick={e => e.target === e.currentTarget && onCancelar()}>
@@ -333,37 +273,35 @@ export default function Fijos() {
     setEliminando(false)
   }
 
-  const recActivosN = recurrentes.filter(r => r.activo).length
-  const cuotasActivasN = cuotas.filter(c => c.activa && c.cuotas_pagadas < c.cantidad_cuotas).length
-
   return (
     <div style={s.root}>
+      {/* Header */}
       <div style={s.header}>
         <h1 style={s.pageTitle}>Fijos</h1>
         <button onClick={() => setMostrarForm(v => !v)} style={s.addBtn}>
-          {mostrarForm
-            ? <><X size={15} /> Cancelar</>
-            : <><Plus size={15} /> Nuevo</>}
+          {mostrarForm ? <><X size={14} /> Cancelar</> : <><Plus size={14} /> Nuevo</>}
         </button>
       </div>
 
-      <div style={s.tabsRow}>
-        <button
-          onClick={() => setTab('recurrentes')}
-          style={{ ...s.tabBtn, ...(tab === 'recurrentes' ? s.tabBtnActive : {}) }}
-        >
-          <Repeat2 size={15} />
-          Recurrentes
-          {recActivosN > 0 && <span style={s.badge}>{recActivosN}</span>}
-        </button>
-        <button
-          onClick={() => setTab('cuotas')}
-          style={{ ...s.tabBtn, ...(tab === 'cuotas' ? s.tabBtnActive : {}) }}
-        >
-          <CreditCard size={15} />
-          Cuotas
-          {cuotasActivasN > 0 && <span style={s.badge}>{cuotasActivasN}</span>}
-        </button>
+      {/* Tab toggle */}
+      <div style={s.tabToggle}>
+        {[
+          { key: 'recurrentes', icon: <Repeat2 size={13} />, label: 'Recurrentes' },
+          { key: 'cuotas', icon: <CreditCard size={13} />, label: 'Cuotas' },
+        ].map(({ key, icon, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            style={{
+              ...s.tabBtn,
+              background: tab === key ? THEME.colors.card : 'transparent',
+              color: tab === key ? THEME.colors.textPrimary : THEME.colors.textMuted,
+              fontWeight: tab === key ? 500 : 400,
+            }}
+          >
+            {icon}{label}
+          </button>
+        ))}
       </div>
 
       {error && <div style={s.errorMsg}>{error}</div>}
@@ -401,14 +339,44 @@ export default function Fijos() {
           </div>
         ) : (
           <div style={s.lista}>
-            {recurrentes.map(r => (
-              <ItemRecurrente
-                key={r.id}
-                rec={r}
-                onToggleActivo={handleToggleActivo}
-                onEliminar={item => setConfirm({ tipo: 'rec', item })}
-              />
-            ))}
+            {recurrentes.map((r, i) => {
+              const color = r.tipo === 'ingreso' ? THEME.colors.success : THEME.colors.danger
+              const signo = r.tipo === 'ingreso' ? '+' : '-'
+              return (
+                <div
+                  key={r.id}
+                  style={{ ...s.item, animation: 'fadeIn 0.25s ease both', animationDelay: `${i * 0.05}s` }}
+                >
+                  <div style={s.itemLeft}>
+                    <span style={s.itemIcono}>{r.categoria?.icono ?? '📦'}</span>
+                    <div style={s.itemInfo}>
+                      <span style={s.itemNombre}>{r.descripcion}</span>
+                      <span style={s.itemMeta}>Mensual · día {r.dia_del_mes}</span>
+                    </div>
+                  </div>
+                  <div style={s.itemRight}>
+                    <span style={{ ...s.itemMonto, color }}>{signo}{formatMoney(r.monto, r.moneda)}</span>
+                    <div style={s.itemActions}>
+                      <button
+                        onClick={() => handleToggleActivo(r)}
+                        style={{
+                          ...s.chipBtn,
+                          background: r.activo ? THEME.colors.accentSoft : THEME.colors.surface,
+                          color: r.activo ? THEME.colors.accent : THEME.colors.textMuted,
+                        }}
+                        title={r.activo ? 'Archivar' : 'Activar'}
+                      >
+                        {r.activo ? <PauseCircle size={13} /> : <PlayCircle size={13} />}
+                        {r.activo ? 'Activo' : 'Pausado'}
+                      </button>
+                      <button onClick={() => setConfirm({ tipo: 'rec', item: r })} style={s.deleteSmBtn} title="Eliminar">
+                        <Trash2 size={14} color={THEME.colors.textMuted} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )
       ) : (
@@ -419,13 +387,32 @@ export default function Fijos() {
           </div>
         ) : (
           <div style={s.lista}>
-            {cuotas.map(c => (
-              <ItemCuota
-                key={c.id}
-                cuota={c}
-                onEliminar={item => setConfirm({ tipo: 'cuota', item })}
-              />
-            ))}
+            {cuotas.map((c, i) => {
+              const restantes = c.cantidad_cuotas - c.cuotas_pagadas
+              return (
+                <div
+                  key={c.id}
+                  style={{ ...s.item, animation: 'fadeIn 0.25s ease both', animationDelay: `${i * 0.05}s` }}
+                >
+                  <div style={s.itemLeft}>
+                    <span style={s.itemIcono}>{c.categoria?.icono ?? '📦'}</span>
+                    <div style={s.itemInfo}>
+                      <span style={s.itemNombre}>{c.descripcion}</span>
+                      <span style={s.itemMeta}>Cuota {c.cuotas_pagadas + 1}/{c.cantidad_cuotas}</span>
+                    </div>
+                  </div>
+                  <div style={s.itemRight}>
+                    <span style={{ ...s.itemMonto, color: THEME.colors.danger }}>-{formatMoney(c.monto_cuota, c.moneda)}</span>
+                    <div style={s.itemActions}>
+                      <span style={s.cuotaRest}>{restantes} restantes</span>
+                      <button onClick={() => setConfirm({ tipo: 'cuota', item: c })} style={s.deleteSmBtn} title="Eliminar">
+                        <Trash2 size={14} color={THEME.colors.textMuted} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )
       )}
@@ -443,120 +430,114 @@ export default function Fijos() {
 }
 
 const s = {
-  root: { minHeight: '100svh', background: THEME.colors.bg, paddingBottom: '100px' },
+  root: { minHeight: '100vh', background: THEME.colors.bg, padding: '28px 32px 32px' },
   header: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '20px 16px 16px', background: THEME.colors.surface,
-    borderBottom: `1px solid ${THEME.colors.border}`, position: 'sticky', top: 0, zIndex: 10,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px',
   },
-  pageTitle: { margin: 0, fontSize: '20px', fontWeight: '700', color: THEME.colors.textPrimary },
+  pageTitle: { margin: 0, fontSize: '22px', fontWeight: 700, color: THEME.colors.textPrimary, letterSpacing: '-0.5px' },
   addBtn: {
-    height: '40px', padding: '0 16px', background: THEME.colors.primary,
-    color: '#fff', border: 'none', borderRadius: THEME.radius.md,
-    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s',
+    padding: '8px 18px', borderRadius: THEME.radius.sm, background: THEME.colors.accent,
+    color: '#fff', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.font, minHeight: '44px',
   },
-  tabsRow: {
-    display: 'flex', gap: '0', borderBottom: `1px solid ${THEME.colors.border}`,
-    background: THEME.colors.surface,
+  tabToggle: {
+    display: 'inline-flex', padding: '3px', background: THEME.colors.surface,
+    borderRadius: THEME.radius.sm, marginBottom: '16px',
   },
   tabBtn: {
-    flex: 1, height: '48px', border: 'none', background: 'none',
-    color: THEME.colors.textSecondary, fontSize: '14px', fontWeight: '500',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    gap: '6px', borderBottom: '2px solid transparent', transition: 'all 0.15s',
-  },
-  tabBtnActive: {
-    color: THEME.colors.primary, borderBottom: `2px solid ${THEME.colors.primary}`, fontWeight: '600',
-  },
-  badge: {
-    background: THEME.colors.primary, color: '#fff', borderRadius: '9999px',
-    fontSize: '11px', fontWeight: '700', padding: '1px 6px', minWidth: '18px', textAlign: 'center',
+    padding: '7px 20px', border: 'none', fontSize: '12px', cursor: 'pointer',
+    transition: 'all 0.2s', textTransform: 'capitalize', borderRadius: THEME.radius.sm,
+    display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.font,
   },
   errorMsg: {
-    margin: '12px 16px 0', background: THEME.colors.errorBg, color: THEME.colors.danger,
+    marginBottom: '12px', background: THEME.colors.errorBg, color: THEME.colors.danger,
     borderRadius: THEME.radius.sm, padding: '10px 14px', fontSize: '13px',
   },
-  formWrap: { padding: '16px' },
+  formWrap: { marginBottom: '16px' },
   formCard: {
-    background: THEME.colors.surface, borderRadius: THEME.radius.lg,
-    boxShadow: THEME.shadow.md, padding: '20px 16px',
+    background: THEME.colors.card, borderRadius: THEME.radius.lg,
+    padding: '20px 16px', border: `1px solid ${THEME.colors.cardBorder}`,
     display: 'flex', flexDirection: 'column', gap: '14px',
   },
-  loadingWrap: { textAlign: 'center', padding: '60px 16px', color: THEME.colors.textSecondary, fontSize: '14px' },
+  loadingWrap: { textAlign: 'center', padding: '60px 16px', color: THEME.colors.textMuted, fontSize: '14px' },
   empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '60px 16px' },
   emptyText: { fontSize: '15px', color: THEME.colors.textMuted },
-  lista: { padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  lista: { display: 'flex', flexDirection: 'column', gap: '6px' },
   item: {
-    display: 'flex', alignItems: 'center', gap: '12px',
-    background: THEME.colors.surface, borderRadius: THEME.radius.lg,
-    padding: '14px 16px', boxShadow: THEME.shadow.sm,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '16px', borderRadius: THEME.radius.sm,
+    background: THEME.colors.card, border: `1px solid ${THEME.colors.cardBorder}`,
   },
-  itemIcon: { fontSize: '22px', lineHeight: 1, flexShrink: 0, width: '32px', textAlign: 'center' },
-  itemInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
-  itemNombre: { fontSize: '14px', fontWeight: '600', color: THEME.colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  itemLeft: { display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 },
+  itemIcono: { fontSize: '22px', lineHeight: 1, flexShrink: 0 },
+  itemInfo: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+  itemNombre: {
+    fontSize: '13px', fontWeight: 500, color: THEME.colors.textPrimary,
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+  },
   itemMeta: { fontSize: '11px', color: THEME.colors.textMuted },
-  itemMonto: { fontSize: '14px', fontWeight: '700', flexShrink: 0 },
-  itemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 },
+  itemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 },
+  itemMonto: { fontSize: '15px', fontWeight: 700 },
+  itemActions: { display: 'flex', gap: '6px', alignItems: 'center' },
   cuotaRest: { fontSize: '11px', color: THEME.colors.textMuted },
-  itemActions: { display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' },
   chipBtn: {
     height: '28px', padding: '0 10px', borderRadius: THEME.radius.full,
-    border: 'none', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s',
+    border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s', fontFamily: THEME.font,
   },
   deleteSmBtn: {
     background: 'none', border: 'none', cursor: 'pointer',
-    width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: THEME.radius.sm, padding: 0,
+    width: '32px', height: '32px', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', borderRadius: THEME.radius.sm, padding: 0,
   },
-  miniBarFondo: { height: '4px', background: THEME.colors.border, borderRadius: '9999px', overflow: 'hidden', marginTop: '2px' },
-  miniBarRelleno: { height: '100%', background: THEME.colors.primary, borderRadius: '9999px', transition: 'width 0.4s ease' },
+  // Form styles
   toggleRow: {
-    display: 'flex', borderRadius: THEME.radius.md, overflow: 'hidden',
-    border: `1.5px solid ${THEME.colors.border}`,
+    display: 'flex', borderRadius: THEME.radius.sm, overflow: 'hidden',
+    border: `1.5px solid ${THEME.colors.cardBorder}`,
   },
   toggleBtn: {
-    flex: 1, height: '44px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500',
+    flex: 1, height: '44px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500,
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-    transition: 'background 0.15s, color 0.15s',
+    transition: 'background 0.15s, color 0.15s', fontFamily: THEME.font,
   },
   row: { display: 'flex', gap: '12px' },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '13px', fontWeight: '500', color: THEME.colors.textSecondary },
+  label: { fontSize: '13px', fontWeight: 500, color: THEME.colors.textMuted },
   input: {
-    height: '48px', padding: '0 14px', borderRadius: THEME.radius.md,
-    border: `1.5px solid ${THEME.colors.border}`, fontSize: '15px',
-    color: THEME.colors.textPrimary, background: THEME.colors.bg,
-    outline: 'none', width: '100%', boxSizing: 'border-box',
+    height: '48px', padding: '0 14px', borderRadius: THEME.radius.sm,
+    border: `1.5px solid ${THEME.colors.inputBorder}`, fontSize: '15px',
+    color: THEME.colors.textPrimary, background: THEME.colors.inputBg,
+    outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: THEME.font,
   },
   select: {
-    height: '48px', padding: '0 14px', borderRadius: THEME.radius.md,
-    border: `1.5px solid ${THEME.colors.border}`, fontSize: '15px',
-    color: THEME.colors.textPrimary, background: THEME.colors.bg,
-    outline: 'none', width: '100%', boxSizing: 'border-box', cursor: 'pointer',
+    height: '48px', padding: '0 14px', borderRadius: THEME.radius.sm,
+    border: `1.5px solid ${THEME.colors.inputBorder}`, fontSize: '15px',
+    color: THEME.colors.textPrimary, background: THEME.colors.inputBg,
+    outline: 'none', width: '100%', boxSizing: 'border-box', cursor: 'pointer', fontFamily: THEME.font,
   },
   errorBox: { background: THEME.colors.errorBg, color: THEME.colors.danger, borderRadius: THEME.radius.sm, padding: '10px 14px', fontSize: '13px' },
   actions: { display: 'flex', gap: '12px' },
   cancelBtn: {
-    flex: 1, height: '52px', background: THEME.colors.surface, color: THEME.colors.textSecondary,
-    border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, fontSize: '15px', fontWeight: '500', cursor: 'pointer',
+    flex: 1, height: '52px', background: THEME.colors.inputBg, color: THEME.colors.textMuted,
+    border: `1.5px solid ${THEME.colors.cardBorder}`, borderRadius: THEME.radius.sm,
+    fontSize: '15px', fontWeight: 500, cursor: 'pointer', fontFamily: THEME.font,
   },
   saveBtn: {
-    flex: 2, height: '52px', background: THEME.colors.primary, color: '#fff',
-    border: 'none', borderRadius: THEME.radius.md, fontSize: '15px', fontWeight: '600', cursor: 'pointer',
-    transition: 'all 0.15s',
+    flex: 2, height: '52px', background: THEME.colors.accent, color: '#fff',
+    border: 'none', borderRadius: THEME.radius.sm, fontSize: '15px', fontWeight: 600,
+    cursor: 'pointer', transition: 'all 0.15s', fontFamily: THEME.font,
   },
   dangerBtn: {
     flex: 2, height: '52px', background: THEME.colors.danger, color: '#fff',
-    border: 'none', borderRadius: THEME.radius.md, fontSize: '15px', fontWeight: '600', cursor: 'pointer',
+    border: 'none', borderRadius: THEME.radius.sm, fontSize: '15px', fontWeight: 600,
+    cursor: 'pointer', fontFamily: THEME.font,
   },
   confirmOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 300,
     display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
   },
   confirmSheet: {
-    background: THEME.colors.surface, borderRadius: `${THEME.radius.xl} ${THEME.radius.xl} 0 0`,
+    background: '#181b24', borderRadius: `${THEME.radius.xl} ${THEME.radius.xl} 0 0`,
     width: '100%', maxWidth: '600px', padding: '24px 20px 40px', boxSizing: 'border-box',
     animation: 'slideUp 0.25s cubic-bezier(0.4,0,0.2,1)',
   },

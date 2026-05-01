@@ -9,7 +9,7 @@ import Movimientos from './pages/Movimientos'
 import Categorias from './pages/Categorias'
 import Presupuestos from './pages/Presupuestos'
 import Fijos from './pages/Fijos'
-import Navbar from './components/Navbar'
+import Sidebar from './components/Sidebar'
 
 const ROUTES = {
   '/': 'chat',
@@ -67,6 +67,7 @@ export default function App() {
 
   return (
     <div style={s.root}>
+      <Sidebar page={page} navigate={navigate} />
       <div style={s.content}>
         {page === 'chat'         && <Chat />}
         {page === 'dashboard'    && <Dashboard />}
@@ -75,7 +76,6 @@ export default function App() {
         {page === 'presupuestos' && <Presupuestos />}
         {page === 'categorias'   && <Categorias />}
       </div>
-      <Navbar page={page} navigate={navigate} />
     </div>
   )
 }
@@ -83,20 +83,22 @@ export default function App() {
 const s = {
   root: {
     display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100svh',
+    minHeight: '100vh',
     background: THEME.colors.bg,
   },
   content: {
     flex: 1,
-    paddingBottom: '80px',
+    marginLeft: '220px',
+    minHeight: '100vh',
+    overflowY: 'auto',
   },
   loading: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: '100svh',
+    minHeight: '100vh',
     color: THEME.colors.textSecondary,
     fontSize: '14px',
+    fontFamily: THEME.font,
   },
 }
