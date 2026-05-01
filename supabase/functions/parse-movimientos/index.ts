@@ -51,8 +51,11 @@ ${JSON.stringify(cuentas)}
 Reglas:
 - "k" o "mil" = multiplicar por 1000 (10k = 10000)
 - Si no especifica moneda, usar ARS
-- Si dice "dolares", "usd", "verdes" = USD
-- Si dice "sueldo", "pagaron", "cobre" = ingreso. Todo lo demas = egreso por defecto
+- Si dice "dolares", "usd", "verdes" = USD para ese movimiento
+- Si dice "sueldo", "pagaron", "cobre", "me depositaron", "cobré", "me pagaron", "gané" = ingreso
+- Todo lo demas = egreso por defecto
+- COMPRA DE DIVISAS: si el usuario dice "compre dolares/usd/verdes" y menciona cuanto gasto en ARS Y cuantos dolares recibio, generar DOS movimientos: (1) egreso en ARS por lo que gasto, (2) ingreso en USD por los dolares que recibio. Mismo principio para venta de dolares (egreso USD + ingreso ARS).
+- SEPARAR bien cada gasto mencionado, aunque esten en una sola oracion larga
 - Para categoria_id y cuenta_id: elegir el mas apropiado de la lista. Si no hay match, usar null
 - Para cuenta_id null, usar la primera cuenta de la lista como default
 - fecha: usar fecha_hoy si no se especifica otra
