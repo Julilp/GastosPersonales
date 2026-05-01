@@ -13,7 +13,8 @@ import {
   labelMes,
 } from '../lib/finanzas'
 import ModalMovimiento from '../components/ModalMovimiento'
-import { Clock, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Clock, ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
 
 function PendienteItem({ label, sub, monto, moneda, tipo, onAplicar, aplicando }) {
   const color = tipo === 'ingreso' ? THEME.colors.success : THEME.colors.danger
@@ -95,6 +96,14 @@ export default function Dashboard() {
     setAplicandoId(null)
   }
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   const filaMoneda = resumen.filter(r => r.moneda === moneda)
   const totalIngresos = filaMoneda.reduce((a, r) => a + Number(r.total_ingresos ?? 0), 0)
   const totalEgresos = filaMoneda.reduce((a, r) => a + Number(r.total_egresos ?? 0), 0)
@@ -108,10 +117,10 @@ export default function Dashboard() {
   const totalGastos = gastos.reduce((a, g) => a + Number(g.total_egresos ?? 0), 0)
 
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, padding: isMobile ? '16px' : '28px 32px 32px' }}>
       {/* Header row: MonthNav + CurrToggle */}
-      <div style={s.headerRow}>
-        <div style={s.monthNav}>
+      <div style={{ ...s.headerRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0' }}>
+        <div style={{ ...s.monthNav, justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
           <button onClick={() => irMes(-1)} style={s.navBtn}>
             <ChevronLeft size={18} />
           </button>
@@ -120,7 +129,7 @@ export default function Dashboard() {
             <ChevronRight size={18} />
           </button>
         </div>
-        <div style={s.currToggle}>
+        <div style={{ ...s.currToggle, justifyContent: isMobile ? 'center' : 'flex-end' }}>
           {Object.keys(APP_CONFIG.currencies).map(c => (
             <button
               key={c}
@@ -131,11 +140,21 @@ export default function Dashboard() {
                 color: moneda === c ? '#fff' : THEME.colors.textMuted,
                 fontWeight: moneda === c ? '600' : '400',
                 border: `1px solid ${moneda === c ? THEME.colors.accent : THEME.colors.cardBorder}`,
+                flex: isMobile ? 1 : 'none',
               }}
             >
               {c}
             </button>
           ))}
+          {isMobile && (
+            <button 
+              onClick={() => supabase.auth.signOut()} 
+              style={{ ...s.currBtn, background: 'transparent', border: `1px solid ${THEME.colors.cardBorder}`, color: THEME.colors.danger }}
+              aria-label="Cerrar sesión"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -146,7 +165,7 @@ export default function Dashboard() {
       ) : (
         <>
           {/* 3-col cards grid */}
-          <div style={s.cardsGrid}>
+          <div style={{ ...s.cardsGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
             <div style={s.card}>
               <span style={s.cardLabel}>Balance</span>
               <span style={{ ...s.cardMonto, color: THEME.colors.textPrimary }}>{formatMoney(balance, moneda)}</span>
@@ -162,7 +181,7 @@ export default function Dashboard() {
           </div>
 
           {/* 2-col grid: gastos por cat + últimos movs */}
-          <div style={s.twoColGrid}>
+          <div style={{ ...s.twoColGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
             {/* Gastos por categoría */}
             <div style={s.card}>
               <h3 style={s.cardTitle}>Gastos por categoría</h3>

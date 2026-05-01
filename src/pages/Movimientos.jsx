@@ -28,6 +28,14 @@ export default function Movimientos() {
   const [confirmEliminar, setConfirmEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -78,7 +86,7 @@ export default function Movimientos() {
   }, [movimientos, tipoFiltro, search])
 
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, padding: isMobile ? '16px' : '28px 32px 32px' }}>
       {/* MonthNav */}
       <div style={s.header}>
         <button onClick={() => irMes(-1)} style={s.navBtn}>
@@ -91,8 +99,8 @@ export default function Movimientos() {
       </div>
 
       {/* Filter row: chips + search */}
-      <div style={s.filterRow}>
-        <div style={s.chips}>
+      <div style={{ ...s.filterRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center' }}>
+        <div style={{ ...s.chips, overflowX: 'auto', paddingBottom: isMobile ? '4px' : 0 }}>
           {[
             { value: '', label: 'todos' },
             { value: 'egreso', label: 'egresos' },
@@ -103,6 +111,7 @@ export default function Movimientos() {
               onClick={() => setTipoFiltro(value)}
               style={{
                 ...s.chip,
+                flex: isMobile ? 1 : 'none',
                 background: tipoFiltro === value ? THEME.colors.accent : 'transparent',
                 color: tipoFiltro === value ? '#fff' : THEME.colors.textMuted,
                 border: `1px solid ${tipoFiltro === value ? THEME.colors.accent : THEME.colors.cardBorder}`,
@@ -117,7 +126,7 @@ export default function Movimientos() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar..."
-          style={s.searchInput}
+          style={{ ...s.searchInput, maxWidth: isMobile ? '100%' : '280px' }}
         />
       </div>
 

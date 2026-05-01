@@ -169,6 +169,14 @@ export default function Categorias() {
   const [confirmEliminar, setConfirmEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
@@ -212,7 +220,7 @@ export default function Categorias() {
   }
 
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, padding: isMobile ? 0 : '0 0 32px' }}>
       {/* Header */}
       <div style={s.header}>
         <h1 style={s.pageTitle}>Categorías</h1>

@@ -217,6 +217,14 @@ export default function Fijos() {
   const [confirm, setConfirm] = useState(null)
   const [eliminando, setEliminando] = useState(false)
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
@@ -274,17 +282,17 @@ export default function Fijos() {
   }
 
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, padding: isMobile ? '16px' : '28px 32px 32px' }}>
       {/* Header */}
       <div style={s.header}>
-        <h1 style={s.pageTitle}>Fijos</h1>
-        <button onClick={() => setMostrarForm(v => !v)} style={s.addBtn}>
+        <h1 style={{ ...s.pageTitle, fontSize: isMobile ? '20px' : '22px' }}>Fijos</h1>
+        <button onClick={() => setMostrarForm(v => !v)} style={{ ...s.addBtn, padding: isMobile ? '8px 12px' : '8px 18px' }}>
           {mostrarForm ? <><X size={14} /> Cancelar</> : <><Plus size={14} /> Nuevo</>}
         </button>
       </div>
 
       {/* Tab toggle */}
-      <div style={s.tabToggle}>
+      <div style={{ ...s.tabToggle, width: isMobile ? '100%' : 'auto', display: isMobile ? 'flex' : 'inline-flex' }}>
         {[
           { key: 'recurrentes', icon: <Repeat2 size={13} />, label: 'Recurrentes' },
           { key: 'cuotas', icon: <CreditCard size={13} />, label: 'Cuotas' },
@@ -294,9 +302,11 @@ export default function Fijos() {
             onClick={() => setTab(key)}
             style={{
               ...s.tabBtn,
+              flex: isMobile ? 1 : 'none',
               background: tab === key ? THEME.colors.card : 'transparent',
               color: tab === key ? THEME.colors.textPrimary : THEME.colors.textMuted,
               fontWeight: tab === key ? 500 : 400,
+              justifyContent: 'center',
             }}
           >
             {icon}{label}
@@ -500,7 +510,7 @@ const s = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
     transition: 'background 0.15s, color 0.15s', fontFamily: THEME.font,
   },
-  row: { display: 'flex', gap: '12px' },
+  row: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 500, color: THEME.colors.textMuted },
   input: {

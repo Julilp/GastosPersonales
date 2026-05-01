@@ -31,6 +31,14 @@ export default function Chat() {
   const [categorias, setCategorias] = useState([])
   const endRef = useRef(null)
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   useEffect(() => {
     async function cargar() {
       try {
@@ -110,9 +118,9 @@ export default function Chat() {
   return (
     <div style={s.root}>
       {/* Header */}
-      <div style={s.header}>
+      <div style={{ ...s.header, padding: isMobile ? '16px' : '28px 32px 16px' }}>
         <div>
-          <h1 style={s.titulo}>Chat</h1>
+          <h1 style={{ ...s.titulo, fontSize: isMobile ? '20px' : '22px' }}>Chat</h1>
           <p style={s.subtitulo}>Registrá movimientos en texto libre</p>
         </div>
       </div>
@@ -126,7 +134,7 @@ export default function Chat() {
       )}
 
       {/* Messages area */}
-      <div style={s.messagesArea}>
+      <div style={{ ...s.messagesArea, padding: isMobile ? '16px 16px 140px' : '16px 32px 120px' }}>
         {msgs.length === 0 && !parseando ? (
           <div style={s.empty}>
             <div style={s.emptyIcon}><Bot size={48} color={THEME.colors.textMuted} strokeWidth={1.5} /></div>
@@ -190,7 +198,12 @@ export default function Chat() {
       </div>
 
       {/* Input area — fixed */}
-      <div style={s.inputBar}>
+      <div style={{ 
+        ...s.inputBar, 
+        left: isMobile ? 0 : '220px',
+        bottom: isMobile ? '64px' : 0,
+        padding: isMobile ? '12px 16px' : '12px 24px'
+      }}>
         <div style={s.inputWrap}>
           <input
             type="text"

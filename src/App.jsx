@@ -10,6 +10,7 @@ import Categorias from './pages/Categorias'
 import Presupuestos from './pages/Presupuestos'
 import Fijos from './pages/Fijos'
 import Sidebar from './components/Sidebar'
+import BottomNav from './components/BottomNav'
 
 const ROUTES = {
   '/': 'chat',
@@ -27,6 +28,13 @@ function getPage() {
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [page, setPage] = useState(getPage())
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -67,8 +75,12 @@ export default function App() {
 
   return (
     <div style={s.root}>
-      <Sidebar page={page} navigate={navigate} />
-      <div style={s.content}>
+      {!isMobile && <Sidebar page={page} navigate={navigate} />}
+      <div style={{
+        ...s.content,
+        marginLeft: isMobile ? '0' : '220px',
+        paddingBottom: isMobile ? '80px' : '0',
+      }}>
         {page === 'chat'         && <Chat />}
         {page === 'dashboard'    && <Dashboard />}
         {page === 'movimientos'  && <Movimientos />}
@@ -76,6 +88,7 @@ export default function App() {
         {page === 'presupuestos' && <Presupuestos />}
         {page === 'categorias'   && <Categorias />}
       </div>
+      {isMobile && <BottomNav page={page} navigate={navigate} />}
     </div>
   )
 }
@@ -88,7 +101,6 @@ const s = {
   },
   content: {
     flex: 1,
-    marginLeft: '220px',
     minHeight: '100vh',
     overflowY: 'auto',
   },

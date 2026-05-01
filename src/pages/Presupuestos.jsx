@@ -141,6 +141,14 @@ export default function Presupuestos() {
   const [modalPresupAbierto, setModalPresupAbierto] = useState(false)
   const [modalMetaAbierto, setModalMetaAbierto] = useState(false)
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   useEffect(() => { fetchData() }, [mes, anio, moneda])
 
   async function fetchData() {
@@ -187,15 +195,15 @@ export default function Presupuestos() {
   const metaSuperada = balanceMes >= metaMonto && metaMonto > 0
 
   return (
-    <div style={s.root}>
+    <div style={{ ...s.root, padding: isMobile ? '16px' : '28px 32px 32px' }}>
       {/* Header: MonthNav + CurrToggle */}
-      <div style={s.headerRow}>
-        <div style={s.monthNav}>
+      <div style={{ ...s.headerRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0' }}>
+        <div style={{ ...s.monthNav, justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
           <button onClick={() => irMes(-1)} style={s.navBtn}><ChevronLeft size={18} /></button>
           <span style={s.mesLabel}>{labelMes(mes, anio)}</span>
           <button onClick={() => irMes(1)} style={s.navBtn}><ChevronRight size={18} /></button>
         </div>
-        <div style={s.currToggle}>
+        <div style={{ ...s.currToggle, justifyContent: isMobile ? 'center' : 'flex-end' }}>
           {Object.keys(APP_CONFIG.currencies).map(c => (
             <button
               key={c}
@@ -206,6 +214,7 @@ export default function Presupuestos() {
                 color: moneda === c ? '#fff' : THEME.colors.textMuted,
                 fontWeight: moneda === c ? '600' : '400',
                 border: `1px solid ${moneda === c ? THEME.colors.accent : THEME.colors.cardBorder}`,
+                flex: isMobile ? 1 : 'none',
               }}
             >
               {c}

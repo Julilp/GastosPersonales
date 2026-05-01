@@ -314,6 +314,7 @@ const s = {
   row: {
     display: 'flex',
     gap: '12px',
+    flexWrap: 'wrap',
   },
   field: {
     display: 'flex',
