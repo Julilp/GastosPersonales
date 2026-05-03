@@ -227,84 +227,74 @@ Devuelve UNICAMENTE un JSON valido sin texto adicional:
   }
 }
 
+async function crearEventoGoogle(accessToken: string, eventoDatos: EventoDatos): Promise<string> {
+  const eventBody = {
+    summary: eventoDatos.summary,
+    ...(eventoDatos.description ? { description: eventoDatos.description } : {}),
+    ...(eventoDatos.location ? { location: eventoDatos.location } : {}),
+    start: { dateTime: eventoDatos.start_datetime, timeZone: 'America/Argentina/Buenos_Aires' },
+    end: { dateTime: eventoDatos.end_datetime, timeZone: 'America/Argentina/Buenos_Aires' },
+  }
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(eventBody),
+  })
+  if (!res.ok) {
+    const errTxt = await res.text()
+    console.error('Google Calendar create error:', res.status, errTxt)
+    throw new Error(`Error creando evento en Google Calendar (${res.status})`)
+  }
+  const ev = await res.json()
+  return ev.summary as string
+}
+
 async function handleCalendarioCrear(
   apiKey: string,
   texto: string,
   fechaHoy: string,
 ): Promise<AssistantResponse> {
-  // 1. Extraer datos del evento con Claude
-  const systemPrompt = `Sos un asistente personal argentino. El usuario quiere crear un evento en Google Calendar.
+  const systemPrompt = `Sos un asistente personal argentino. El usuario quiere crear uno o más eventos en Google Calendar.
 Fecha de hoy: ${fechaHoy}
 
-Extraé los datos del evento del mensaje y respondé ÚNICAMENTE con un JSON válido en este formato:
-{
-  "summary": "título del evento",
-  "description": "descripción opcional o null",
-  "start_datetime": "YYYY-MM-DDTHH:MM:SS",
-  "end_datetime": "YYYY-MM-DDTHH:MM:SS",
-  "location": "lugar opcional o null"
-}
+Extraé todos los eventos del mensaje y respondé ÚNICAMENTE con un JSON válido:
+{"eventos":[{"summary":"título","description":null,"start_datetime":"YYYY-MM-DDTHH:MM:SS","end_datetime":"YYYY-MM-DDTHH:MM:SS","location":null}]}
 
 Reglas:
 - Si no menciona hora de fin, asumir 1 hora después del inicio
 - Si no menciona hora, asumir 09:00
-- Si dice "mañana", calcular a partir de fecha_hoy
-- Si dice "el lunes", "el viernes", etc., calcular la próxima ocurrencia a partir de fecha_hoy
-- Usar formato ISO 8601 para fechas y horas
-- summary es obligatorio; si no hay título claro, inferirlo del contexto`
+- Si dice "mañana", calcular desde fecha_hoy
+- Si dice "el lunes/viernes/etc.", calcular la próxima ocurrencia desde fecha_hoy
+- Si pide eventos RECURRENTES (ej: "todos los miércoles y jueves") sin fecha fin, generá las próximas 8 ocurrencias de cada día
+- Si pide recurrentes CON fecha fin, generá todas las ocurrencias hasta esa fecha
+- Cada ocurrencia es un objeto separado en el array
+- summary obligatorio; inferirlo del contexto si no está explícito
+- description y location pueden ser null`
 
-  const raw = await callClaude(apiKey, systemPrompt, texto)
-  const eventoDatos = extractJson(raw) as EventoDatos
+  const raw = await callClaude(apiKey, systemPrompt, texto, 2048)
+  const parsed = extractJson(raw) as { eventos?: EventoDatos[] }
+  const eventos = parsed.eventos ?? []
 
-  if (!eventoDatos.summary || !eventoDatos.start_datetime || !eventoDatos.end_datetime) {
-    throw new Error('No pude extraer los datos del evento. Especificá título y fecha/hora.')
-  }
+  if (!eventos.length) throw new Error('No pude extraer los datos del evento. Especificá título y fecha/hora.')
 
-  // 2. Obtener access token y crear el evento
   const accessToken = await getGoogleAccessToken()
+  await Promise.all(eventos.map(e => crearEventoGoogle(accessToken, e)))
 
-  const eventBody = {
-    summary: eventoDatos.summary,
-    ...(eventoDatos.description ? { description: eventoDatos.description } : {}),
-    ...(eventoDatos.location ? { location: eventoDatos.location } : {}),
-    start: {
-      dateTime: eventoDatos.start_datetime,
+  if (eventos.length === 1) {
+    const e = eventos[0]
+    const fechaFormateada = new Date(e.start_datetime).toLocaleString('es-AR', {
+      weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
       timeZone: 'America/Argentina/Buenos_Aires',
-    },
-    end: {
-      dateTime: eventoDatos.end_datetime,
-      timeZone: 'America/Argentina/Buenos_Aires',
-    },
+    })
+    return {
+      intent: 'calendario_crear',
+      mensaje: `Evento creado: "${e.summary}" para el ${fechaFormateada}.${e.location ? ` Lugar: ${e.location}.` : ''}`,
+    }
   }
-
-  const calRes = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(eventBody),
-  })
-
-  if (!calRes.ok) {
-    const errTxt = await calRes.text()
-    console.error('Google Calendar create error:', calRes.status, errTxt)
-    throw new Error(`Error creando evento en Google Calendar (${calRes.status})`)
-  }
-
-  const evento = await calRes.json()
-  const fechaFormateada = new Date(eventoDatos.start_datetime).toLocaleString('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
 
   return {
     intent: 'calendario_crear',
-    mensaje: `Evento creado: "${evento.summary}" para el ${fechaFormateada}.${eventoDatos.location ? ` Lugar: ${eventoDatos.location}.` : ''}`,
+    mensaje: `${eventos.length} eventos creados: "${eventos[0].summary}" y similares, desde ${new Date(eventos[0].start_datetime).toLocaleDateString('es-AR')} hasta ${new Date(eventos[eventos.length - 1].start_datetime).toLocaleDateString('es-AR')}.`,
   }
 }
 
