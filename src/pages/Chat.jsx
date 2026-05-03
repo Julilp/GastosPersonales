@@ -81,7 +81,7 @@ export default function Chat() {
     setError('')
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('parse-movimientos', {
+      const { data, error: fnError } = await supabase.functions.invoke('chat-assistant', {
         body: {
           texto: textoEnviado,
           categorias: categoriasFlat,
@@ -90,18 +90,35 @@ export default function Chat() {
         },
       })
       if (fnError) throw new Error(fnError.message)
-      const parsed = Array.isArray(data) ? data : (data?.movimientos ?? [])
-      if (!parsed.length) throw new Error('No se encontraron movimientos en el texto.')
+      if (data?.error) throw new Error(data.error)
 
-      const guardados = await Promise.all(parsed.map(m => crearMovimiento(m)))
-      setMsgs(prev => [
-        ...prev,
-        {
-          role: 'ai',
-          text: `Registré ${guardados.length} movimiento${guardados.length !== 1 ? 's' : ''}:`,
-          items: guardados,
-        },
-      ])
+      const intent = data?.intent
+
+      if (intent === 'finanzas') {
+        const parsed = Array.isArray(data) ? data : (data?.movimientos ?? [])
+        if (!parsed.length) throw new Error('No se encontraron movimientos en el texto.')
+        const guardados = await Promise.all(parsed.map(m => crearMovimiento(m)))
+        setMsgs(prev => [
+          ...prev,
+          {
+            role: 'ai',
+            text: `Registré ${guardados.length} movimiento${guardados.length !== 1 ? 's' : ''}:`,
+            items: guardados,
+          },
+        ])
+      } else if (intent === 'calendario_ver') {
+        setMsgs(prev => [
+          ...prev,
+          { role: 'ai', text: data.mensaje ?? 'No encontré eventos para ese período.' },
+        ])
+      } else if (intent === 'calendario_crear' || intent === 'calendario_borrar' || intent === 'chat') {
+        setMsgs(prev => [
+          ...prev,
+          { role: 'ai', text: data.mensaje ?? 'Listo.' },
+        ])
+      } else {
+        throw new Error('Respuesta inesperada del asistente.')
+      }
     } catch (e) {
       setMsgs(prev => [...prev, { role: 'ai', text: `No pude interpretar el mensaje: ${e.message}` }])
     }
@@ -121,7 +138,7 @@ export default function Chat() {
       <div style={{ ...s.header, padding: isMobile ? '16px' : '28px 32px 16px' }}>
         <div>
           <h1 style={{ ...s.titulo, fontSize: isMobile ? '20px' : '22px' }}>Chat</h1>
-          <p style={s.subtitulo}>Registrá movimientos en texto libre</p>
+          <p style={s.subtitulo}>Registrá movimientos y manejá tu agenda</p>
         </div>
       </div>
 
@@ -140,7 +157,7 @@ export default function Chat() {
             <div style={s.emptyIcon}><Bot size={48} color={THEME.colors.textMuted} strokeWidth={1.5} /></div>
             <p style={s.emptyTitulo}>Escribi tus movimientos abajo</p>
             <p style={s.emptyDesc}>
-              Ej: "gasté 10k en padel, pagué nafta 5k y me depositaron 50k de sueldo"
+              Ej: "gasté 10k en padel, pagué nafta 5k" o "agenda reunión mañana a las 10"
             </p>
           </div>
         ) : (
@@ -210,7 +227,7 @@ export default function Chat() {
             value={texto}
             onChange={e => setTexto(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ej: gasté 10k en padel, pagué 5k de nafta..."
+            placeholder="Ej: gasté 10k en padel · agenda reunión mañana a las 10 · qué tengo esta semana"
             disabled={parseando}
             style={{ ...s.input, opacity: parseando ? 0.6 : 1 }}
           />
