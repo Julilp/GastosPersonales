@@ -10,6 +10,7 @@ import {
 } from '../lib/finanzas'
 import ModalMovimiento from '../components/ModalMovimiento'
 import { ChevronLeft, ChevronRight, Plus, List } from 'lucide-react'
+import { CategoryIcon } from '../lib/categoryIcons'
 
 export default function Movimientos() {
   const inicial = getMesAnioActual()
@@ -143,13 +144,14 @@ export default function Movimientos() {
         <div style={s.lista}>
           {movsFiltrados.map((mov, i) => {
             const esIngreso = mov.tipo === 'ingreso'
-            const color = esIngreso ? THEME.colors.success : THEME.colors.danger
-            const signo = esIngreso ? '+' : '-'
+            const esTraspaso = mov.tipo === 'traspaso'
+            const color = esTraspaso ? THEME.colors.textMuted : esIngreso ? THEME.colors.success : THEME.colors.danger
+            const signo = esTraspaso ? (mov.traspaso_direccion === 'entrada' ? '+' : '-') : esIngreso ? '+' : '-'
             const cat = mov.categoria
             const catNombre = cat
-              ? cat.parent ? `${cat.parent.nombre} › ${cat.nombre}` : cat.nombre
+              ? cat.parent?.nombre ? `${cat.parent.nombre} › ${cat.nombre}` : cat.nombre
               : '—'
-            const catIcono = cat?.icono ?? (cat?.parent?.icono ?? '📦')
+            const catIcono = esTraspaso ? 'arrow-left-right' : (cat?.icono ?? cat?.parent?.icono ?? 'package')
             const fechaStr = new Date(mov.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
             return (
               <button
@@ -162,7 +164,7 @@ export default function Movimientos() {
                 }}
               >
                 <div style={s.itemLeft}>
-                  <div style={s.iconBox}>{catIcono}</div>
+                  <div style={s.iconBox}><CategoryIcon name={catIcono} size={18} /></div>
                   <div style={s.itemInfo}>
                     <span style={s.itemDesc}>{mov.descripcion || catNombre}</span>
                     <span style={s.itemMeta}>{catNombre} · {mov.cuenta?.nombre} · {fechaStr}</span>

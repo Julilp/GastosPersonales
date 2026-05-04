@@ -249,52 +249,141 @@ async function crearEventoGoogle(accessToken: string, eventoDatos: EventoDatos):
   return ev.summary as string
 }
 
+interface EventoPatron {
+  tipo: 'unico' | 'recurrente'
+  // único
+  summary?: string
+  description?: string | null
+  location?: string | null
+  start_datetime?: string
+  end_datetime?: string
+  // recurrente
+  ocurrencias?: Array<{
+    summary: string
+    description?: string | null
+    location?: string | null
+    day_of_week: number  // 0=domingo, 1=lunes, ..., 6=sábado
+    start_time: string   // "HH:MM"
+    end_time: string     // "HH:MM"
+  }>
+  semanas?: number
+  fecha_inicio?: string  // YYYY-MM-DD
+}
+
+function generarFechasRecurrentes(
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+  fechaInicio: Date,
+  semanas: number,
+): Array<{ start: Date; end: Date }> {
+  const resultados: Array<{ start: Date; end: Date }> = []
+  const cursor = new Date(fechaInicio)
+  // Avanzar hasta el primer día de semana correcto
+  while (cursor.getDay() !== dayOfWeek) {
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  for (let i = 0; i < semanas; i++) {
+    const [sh, sm] = startTime.split(':').map(Number)
+    const [eh, em] = endTime.split(':').map(Number)
+    const start = new Date(cursor)
+    start.setHours(sh, sm, 0, 0)
+    const end = new Date(cursor)
+    end.setHours(eh, em, 0, 0)
+    resultados.push({ start, end })
+    cursor.setDate(cursor.getDate() + 7)
+  }
+  return resultados
+}
+
 async function handleCalendarioCrear(
   apiKey: string,
   texto: string,
   fechaHoy: string,
 ): Promise<AssistantResponse> {
-  const systemPrompt = `Sos un asistente personal argentino. El usuario quiere crear uno o más eventos en Google Calendar.
+  const diasSemana: Record<string, number> = {
+    domingo: 0, lunes: 1, martes: 2, miércoles: 3, miercoles: 3,
+    jueves: 4, viernes: 5, sábado: 6, sabado: 6,
+  }
+
+  const systemPrompt = `Sos un asistente personal argentino. El usuario quiere crear eventos en Google Calendar.
 Fecha de hoy: ${fechaHoy}
 
-Extraé todos los eventos del mensaje y respondé ÚNICAMENTE con un JSON válido:
-{"eventos":[{"summary":"título","description":null,"start_datetime":"YYYY-MM-DDTHH:MM:SS","end_datetime":"YYYY-MM-DDTHH:MM:SS","location":null}]}
+Analizá el mensaje y respondé ÚNICAMENTE con un JSON válido.
+
+Si es un evento ÚNICO:
+{"tipo":"unico","summary":"título","description":null,"location":null,"start_datetime":"YYYY-MM-DDTHH:MM:SS","end_datetime":"YYYY-MM-DDTHH:MM:SS"}
+
+Si son eventos RECURRENTES (todos los lunes, cada miércoles y jueves, etc.):
+{"tipo":"recurrente","semanas":8,"fecha_inicio":"${fechaHoy}","ocurrencias":[{"summary":"título del evento","description":null,"location":"lugar o null","day_of_week":3,"start_time":"18:30","end_time":"22:00"}]}
+
+Valores de day_of_week: 0=domingo,1=lunes,2=martes,3=miércoles,4=jueves,5=viernes,6=sábado
 
 Reglas:
-- Si no menciona hora de fin, asumir 1 hora después del inicio
-- Si no menciona hora, asumir 09:00
-- Si dice "mañana", calcular desde fecha_hoy
-- Si dice "el lunes/viernes/etc.", calcular la próxima ocurrencia desde fecha_hoy
-- Si pide eventos RECURRENTES (ej: "todos los miércoles y jueves") sin fecha fin, generá las próximas 8 ocurrencias de cada día
-- Si pide recurrentes CON fecha fin, generá todas las ocurrencias hasta esa fecha
-- Cada ocurrencia es un objeto separado en el array
-- summary obligatorio; inferirlo del contexto si no está explícito
-- description y location pueden ser null`
+- Si no dice cuántas semanas, usar 8
+- Si menciona fecha fin ("hasta julio", "hasta fin de año"), calcular cuántas semanas son desde hoy
+- Cada día diferente de la semana es una ocurrencia separada en el array
+- Si cada día tiene título diferente, usar el título correspondiente en cada ocurrencia
+- Para evento único sin hora fin, asumir 1 hora después
+- Si no dice hora, asumir 09:00`
 
-  const raw = await callClaude(apiKey, systemPrompt, texto, 2048)
-  const parsed = extractJson(raw) as { eventos?: EventoDatos[] }
-  const eventos = parsed.eventos ?? []
-
-  if (!eventos.length) throw new Error('No pude extraer los datos del evento. Especificá título y fecha/hora.')
+  const raw = await callClaude(apiKey, systemPrompt, texto, 1024)
+  const patron = extractJson(raw) as EventoPatron
 
   const accessToken = await getGoogleAccessToken()
-  await Promise.all(eventos.map(e => crearEventoGoogle(accessToken, e)))
+  let totalCreados = 0
+  let primerSummary = ''
 
-  if (eventos.length === 1) {
-    const e = eventos[0]
-    const fechaFormateada = new Date(e.start_datetime).toLocaleString('es-AR', {
+  if (patron.tipo === 'unico') {
+    if (!patron.summary || !patron.start_datetime || !patron.end_datetime) {
+      throw new Error('No pude extraer los datos del evento. Especificá título y fecha/hora.')
+    }
+    await crearEventoGoogle(accessToken, {
+      summary: patron.summary,
+      description: patron.description ?? undefined,
+      location: patron.location ?? undefined,
+      start_datetime: patron.start_datetime,
+      end_datetime: patron.end_datetime,
+    })
+    const fechaFormateada = new Date(patron.start_datetime).toLocaleString('es-AR', {
       weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
       timeZone: 'America/Argentina/Buenos_Aires',
     })
     return {
       intent: 'calendario_crear',
-      mensaje: `Evento creado: "${e.summary}" para el ${fechaFormateada}.${e.location ? ` Lugar: ${e.location}.` : ''}`,
+      mensaje: `Evento creado: "${patron.summary}" para el ${fechaFormateada}.${patron.location ? ` Lugar: ${patron.location}.` : ''}`,
+    }
+  }
+
+  // Recurrente
+  if (!patron.ocurrencias?.length) throw new Error('No pude interpretar los eventos recurrentes.')
+  const semanas = patron.semanas ?? 8
+  const fechaInicio = new Date(patron.fecha_inicio ?? fechaHoy)
+
+  for (const oc of patron.ocurrencias) {
+    const dayNum = typeof oc.day_of_week === 'number'
+      ? oc.day_of_week
+      : (diasSemana[String(oc.day_of_week).toLowerCase()] ?? 1)
+
+    const fechas = generarFechasRecurrentes(dayNum, oc.start_time, oc.end_time, fechaInicio, semanas)
+    if (!primerSummary) primerSummary = oc.summary
+
+    for (const f of fechas) {
+      await crearEventoGoogle(accessToken, {
+        summary: oc.summary,
+        description: oc.description ?? undefined,
+        location: oc.location ?? undefined,
+        start_datetime: f.start.toISOString().slice(0, 19),
+        end_datetime: f.end.toISOString().slice(0, 19),
+      })
+      await new Promise(r => setTimeout(r, 150))
+      totalCreados++
     }
   }
 
   return {
     intent: 'calendario_crear',
-    mensaje: `${eventos.length} eventos creados: "${eventos[0].summary}" y similares, desde ${new Date(eventos[0].start_datetime).toLocaleDateString('es-AR')} hasta ${new Date(eventos[eventos.length - 1].start_datetime).toLocaleDateString('es-AR')}.`,
+    mensaje: `${totalCreados} eventos creados (${semanas} semanas). "${primerSummary}" y similares desde hoy.`,
   }
 }
 

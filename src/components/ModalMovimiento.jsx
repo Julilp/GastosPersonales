@@ -6,8 +6,12 @@ import {
   getCategorias,
   crearMovimiento,
   actualizarMovimiento,
+  crearTraspaso,
+  crearCategoria,
+  sugerirCategoria,
 } from '../lib/finanzas'
-import { X, Trash2, ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { X, Trash2, ArrowDownRight, ArrowUpRight, ArrowLeftRight, Sparkles, Check, X as XIcon } from 'lucide-react'
+import { CategoryIcon } from '../lib/categoryIcons'
 
 const HOY = () => new Date().toISOString().slice(0, 10)
 
@@ -22,11 +26,19 @@ export default function ModalMovimiento({ movimiento, onClose, onSaved, onElimin
   const [descripcion, setDescripcion] = useState(movimiento?.descripcion ?? '')
   const [fecha, setFecha] = useState(movimiento?.fecha ?? HOY())
 
+  const [cuentaDestinoId, setCuentaDestinoId] = useState('')
+  const [montoDestino, setMontoDestino] = useState('')
+  const [monedaDestino, setMonedaDestino] = useState(APP_CONFIG.defaultCurrency)
+
   const [cuentas, setCuentas] = useState([])
   const [categorias, setCategorias] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const [sugerencia, setSugerencia] = useState(null) // { categoria_id, categoria_nombre, icono, es_nueva }
+  const [buscandoSugerencia, setBuscandoSugerencia] = useState(false)
+  const [creandoCateg, setCreandoCateg] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -44,11 +56,28 @@ export default function ModalMovimiento({ movimiento, onClose, onSaved, onElimin
     load()
   }, [])
 
+  useEffect(() => {
+    if (tipo === 'traspaso' || !descripcion.trim() || descripcion.trim().length < 4) {
+      setSugerencia(null)
+      return
+    }
+    setSugerencia(null)
+    setBuscandoSugerencia(true)
+    const timer = setTimeout(async () => {
+      try {
+        const result = await sugerirCategoria({ descripcion, tipo, categorias })
+        setSugerencia(result)
+      } catch (_) {}
+      setBuscandoSugerencia(false)
+    }, 700)
+    return () => { clearTimeout(timer); setBuscandoSugerencia(false) }
+  }, [descripcion, tipo])
+
   const opcionesCategorias = categorias.flatMap(cat => {
-    const items = [{ id: cat.id, label: `${cat.icono} ${cat.nombre}`, indent: false }]
+    const items = [{ id: cat.id, label: cat.nombre, indent: false }]
     if (cat.subcategorias?.length) {
       cat.subcategorias.forEach(sub => {
-        items.push({ id: sub.id, label: `${sub.icono ?? '  '} ${sub.nombre}`, indent: true })
+        items.push({ id: sub.id, label: sub.nombre, indent: true })
       })
     }
     return items
@@ -59,40 +88,37 @@ export default function ModalMovimiento({ movimiento, onClose, onSaved, onElimin
     setError('')
 
     const montoNum = parseFloat(monto)
-    if (!monto || isNaN(montoNum) || montoNum <= 0) {
-      setError('El monto debe ser mayor a 0')
-      return
-    }
-    if (!cuentaId) {
-      setError('Seleccioná una cuenta')
-      return
-    }
-    if (!categoriaId) {
-      setError('Seleccioná una categoría')
+    if (!monto || isNaN(montoNum) || montoNum <= 0) { setError('El monto debe ser mayor a 0'); return }
+    if (!cuentaId) { setError('Seleccioná una cuenta'); return }
+
+    if (tipo === 'traspaso') {
+      if (!cuentaDestinoId) { setError('Seleccioná la cuenta destino'); return }
+      const montoDestinoNum = parseFloat(montoDestino)
+      if (!montoDestino || isNaN(montoDestinoNum) || montoDestinoNum <= 0) { setError('El monto destino debe ser mayor a 0'); return }
+      setSaving(true)
+      try {
+        await crearTraspaso({
+          origenCuentaId: cuentaId,
+          origenMonto: montoNum,
+          origenMoneda: moneda,
+          destinoCuentaId: cuentaDestinoId,
+          destinoMonto: montoDestinoNum,
+          destinoMoneda: monedaDestino,
+          descripcion: descripcion.trim() || null,
+          fecha,
+        })
+        onSaved()
+      } catch (e) { setError(e.message); setSaving(false) }
       return
     }
 
+    if (!categoriaId) { setError('Seleccioná una categoría'); return }
     setSaving(true)
     try {
-      const payload = {
-        tipo,
-        monto: montoNum,
-        moneda,
-        cuenta_id: cuentaId,
-        categoria_id: categoriaId,
-        descripcion: descripcion.trim() || null,
-        fecha,
-      }
-      if (esEdicion) {
-        await actualizarMovimiento(movimiento.id, payload)
-      } else {
-        await crearMovimiento(payload)
-      }
+      const payload = { tipo, monto: montoNum, moneda, cuenta_id: cuentaId, categoria_id: categoriaId, descripcion: descripcion.trim() || null, fecha }
+      if (esEdicion) { await actualizarMovimiento(movimiento.id, payload) } else { await crearMovimiento(payload) }
       onSaved()
-    } catch (e) {
-      setError(e.message)
-      setSaving(false)
-    }
+    } catch (e) { setError(e.message); setSaving(false) }
   }
 
   return (
@@ -138,6 +164,19 @@ export default function ModalMovimiento({ movimiento, onClose, onSaved, onElimin
                 <ArrowUpRight size={16} />
                 Ingreso
               </button>
+              <button
+                type="button"
+                onClick={() => setTipo('traspaso')}
+                style={{
+                  ...s.toggleBtn,
+                  background: tipo === 'traspaso' ? THEME.colors.accent : THEME.colors.bg,
+                  color: tipo === 'traspaso' ? '#fff' : THEME.colors.textSecondary,
+                  fontWeight: tipo === 'traspaso' ? '600' : '400',
+                }}
+              >
+                <ArrowLeftRight size={16} />
+                Traspaso
+              </button>
             </div>
 
             <div style={s.row}>
@@ -174,17 +213,43 @@ export default function ModalMovimiento({ movimiento, onClose, onSaved, onElimin
               </select>
             </div>
 
-            <div style={s.field}>
-              <label style={s.label}>Categoría</label>
-              <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)} style={s.select}>
-                <option value="">Seleccioná una categoría</option>
-                {opcionesCategorias.map(opt => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.indent ? '    ' : ''}{opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {tipo === 'traspaso' && (
+              <>
+                <div style={s.row}>
+                  <div style={{ ...s.field, flex: 2 }}>
+                    <label style={s.label}>Monto destino</label>
+                    <input type="number" min="0" step="0.01" value={montoDestino} onChange={e => setMontoDestino(e.target.value)} placeholder="0.00" style={s.input} inputMode="decimal" />
+                  </div>
+                  <div style={{ ...s.field, flex: 1 }}>
+                    <label style={s.label}>Moneda</label>
+                    <select value={monedaDestino} onChange={e => setMonedaDestino(e.target.value)} style={s.select}>
+                      {Object.keys(APP_CONFIG.currencies).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={s.field}>
+                  <label style={s.label}>Cuenta destino</label>
+                  <select value={cuentaDestinoId} onChange={e => setCuentaDestinoId(e.target.value)} style={s.select}>
+                    <option value="">Seleccioná cuenta destino</option>
+                    {cuentas.filter(c => c.id !== cuentaId).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {tipo !== 'traspaso' && (
+              <div style={s.field}>
+                <label style={s.label}>Categoría</label>
+                <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)} style={s.select}>
+                  <option value="">Seleccioná una categoría</option>
+                  {opcionesCategorias.map(opt => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.indent ? '    ' : ''}{opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={s.field}>
               <label style={s.label}>Descripción (opcional)</label>
@@ -240,7 +305,7 @@ const s = {
     justifyContent: 'center',
   },
   sheet: {
-    background: THEME.colors.surface,
+    background: '#1a1d2e',
     borderRadius: `${THEME.radius.xl} ${THEME.radius.xl} 0 0`,
     width: '100%',
     maxWidth: '600px',

@@ -4,8 +4,9 @@ import { APP_CONFIG, formatMoney } from '../config/app.config'
 import {
   getResumenMes,
   getGastosPorCategoria,
-  getMovimientos,
+  getGastosPorSubcategoria,
   getPendientesMes,
+  omitirPendiente,
   aplicarRecurrente,
   pagarCuota,
   getMesAnioActual,
@@ -13,10 +14,11 @@ import {
   labelMes,
 } from '../lib/finanzas'
 import ModalMovimiento from '../components/ModalMovimiento'
+import { CategoryIcon } from '../lib/categoryIcons'
 import { Clock, ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
-function PendienteItem({ label, sub, monto, moneda, tipo, onAplicar, aplicando }) {
+function PendienteItem({ label, sub, monto, moneda, tipo, onAplicar, onNoAplicar, aplicando }) {
   const color = tipo === 'ingreso' ? THEME.colors.success : THEME.colors.danger
   const signo = tipo === 'ingreso' ? '+' : '-'
   return (
@@ -26,6 +28,9 @@ function PendienteItem({ label, sub, monto, moneda, tipo, onAplicar, aplicando }
         <span style={sp.itemSub}>{sub}</span>
       </div>
       <span style={{ ...sp.itemMonto, color }}>{signo}{formatMoney(monto, moneda)}</span>
+      <button onClick={onNoAplicar} disabled={aplicando} style={sp.noAplicarBtn}>
+        No aplicar
+      </button>
       <button onClick={onAplicar} disabled={aplicando} style={sp.aplicarBtn}>
         {aplicando ? '...' : 'Aplicar'}
       </button>
@@ -37,11 +42,9 @@ export default function Dashboard() {
   const inicial = getMesAnioActual()
   const [mes, setMes] = useState(inicial.mes)
   const [anio, setAnio] = useState(inicial.anio)
-  const [moneda, setMoneda] = useState(APP_CONFIG.defaultCurrency)
-
   const [resumen, setResumen] = useState([])
   const [gastos, setGastos] = useState([])
-  const [ultimosMovs, setUltimosMovs] = useState([])
+  const [subcategorias, setSubcategorias] = useState([])
   const [pendientes, setPendientes] = useState({ recurrentes_pendientes: [], cuotas_pendientes: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,22 +53,22 @@ export default function Dashboard() {
 
   const esMesActual = (() => { const a = getMesAnioActual(); return mes === a.mes && anio === a.anio })()
 
-  useEffect(() => { fetchData() }, [mes, anio, moneda])
+  useEffect(() => { fetchData() }, [mes, anio])
 
   async function fetchData() {
     setLoading(true)
     setError('')
     try {
-      const [r, g, p, movs] = await Promise.all([
+      const [r, g, p, sub] = await Promise.all([
         getResumenMes(mes, anio),
-        getGastosPorCategoria(mes, anio, moneda),
+        getGastosPorCategoria(mes, anio, APP_CONFIG.defaultCurrency),
         getPendientesMes(mes, anio),
-        getMovimientos({ mes, anio }),
+        getGastosPorSubcategoria(mes, anio, APP_CONFIG.defaultCurrency),
       ])
       setResumen(r)
       setGastos(g)
       setPendientes(p)
-      setUltimosMovs((movs ?? []).slice(0, 5))
+      setSubcategorias(sub ?? [])
     } catch (e) {
       setError(e.message)
     }
@@ -96,6 +99,21 @@ export default function Dashboard() {
     setAplicandoId(null)
   }
 
+  async function handleNoAplicarRec(recId) {
+    setPendientes(p => ({
+      ...p,
+      recurrentes_pendientes: p.recurrentes_pendientes.filter(r => r.id !== recId)
+    }))
+    try { await omitirPendiente('recurrente', recId, mes, anio) } catch (e) { setError(e.message) }
+  }
+  async function handleNoAplicarCuota(cuotaId) {
+    setPendientes(p => ({
+      ...p,
+      cuotas_pendientes: p.cuotas_pendientes.filter(c => c.id !== cuotaId)
+    }))
+    try { await omitirPendiente('cuota', cuotaId, mes, anio) } catch (e) { setError(e.message) }
+  }
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
 
   useEffect(() => {
@@ -104,10 +122,15 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const filaMoneda = resumen.filter(r => r.moneda === moneda)
-  const totalIngresos = filaMoneda.reduce((a, r) => a + Number(r.total_ingresos ?? 0), 0)
-  const totalEgresos = filaMoneda.reduce((a, r) => a + Number(r.total_egresos ?? 0), 0)
-  const balance = totalIngresos - totalEgresos
+  const datosPorMoneda = Object.keys(APP_CONFIG.currencies).map(mon => {
+    const filas = resumen.filter(r => r.moneda === mon)
+    return {
+      moneda: mon,
+      totalIngresos: filas.reduce((a, r) => a + Number(r.total_ingresos ?? 0), 0),
+      totalEgresos: filas.reduce((a, r) => a + Number(r.total_egresos ?? 0), 0),
+      balance: filas.reduce((a, r) => a + Number(r.balance ?? 0), 0),
+    }
+  })
 
   const recPend = pendientes.recurrentes_pendientes ?? []
   const cuotasPend = pendientes.cuotas_pendientes ?? []
@@ -118,8 +141,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ ...s.root, padding: isMobile ? '16px' : '28px 32px 32px' }}>
-      {/* Header row: MonthNav + CurrToggle */}
-      <div style={{ ...s.headerRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0' }}>
+      {/* Header row: MonthNav + Logout */}
+      <div style={s.headerRow}>
         <div style={{ ...s.monthNav, justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
           <button onClick={() => irMes(-1)} style={s.navBtn}>
             <ChevronLeft size={18} />
@@ -128,33 +151,13 @@ export default function Dashboard() {
           <button onClick={() => irMes(1)} style={s.navBtn}>
             <ChevronRight size={18} />
           </button>
-        </div>
-        <div style={{ ...s.currToggle, justifyContent: isMobile ? 'center' : 'flex-end' }}>
-          {Object.keys(APP_CONFIG.currencies).map(c => (
-            <button
-              key={c}
-              onClick={() => setMoneda(c)}
-              style={{
-                ...s.currBtn,
-                background: moneda === c ? THEME.colors.accent : 'transparent',
-                color: moneda === c ? '#fff' : THEME.colors.textMuted,
-                fontWeight: moneda === c ? '600' : '400',
-                border: `1px solid ${moneda === c ? THEME.colors.accent : THEME.colors.cardBorder}`,
-                flex: isMobile ? 1 : 'none',
-              }}
-            >
-              {c}
-            </button>
-          ))}
-          {isMobile && (
-            <button 
-              onClick={() => supabase.auth.signOut()} 
-              style={{ ...s.currBtn, background: 'transparent', border: `1px solid ${THEME.colors.cardBorder}`, color: THEME.colors.danger }}
-              aria-label="Cerrar sesión"
-            >
-              <LogOut size={14} />
-            </button>
-          )}
+          <button
+            onClick={() => supabase.auth.signOut()}
+            style={s.logoutBtn}
+            aria-label="Cerrar sesión"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
 
@@ -164,21 +167,26 @@ export default function Dashboard() {
         <div style={s.loadingWrap}>Cargando...</div>
       ) : (
         <>
-          {/* 3-col cards grid */}
-          <div style={{ ...s.cardsGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
-            <div style={s.card}>
-              <span style={s.cardLabel}>Balance</span>
-              <span style={{ ...s.cardMonto, color: THEME.colors.textPrimary }}>{formatMoney(balance, moneda)}</span>
+          {/* Cards por moneda */}
+          {datosPorMoneda.map(({ moneda: mon, totalIngresos, totalEgresos, balance }) => (
+            <div key={mon}>
+              <span style={s.monedaLabel}>{mon}</span>
+              <div style={{ ...s.cardsGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr' }}>
+                <div style={s.card}>
+                  <span style={s.cardLabel}>Balance</span>
+                  <span style={{ ...s.cardMonto, color: THEME.colors.textPrimary }}>{formatMoney(balance, mon)}</span>
+                </div>
+                <div style={s.card}>
+                  <span style={s.cardLabel}>Ingresos</span>
+                  <span style={{ ...s.cardMonto, color: THEME.colors.success }}>{formatMoney(totalIngresos, mon)}</span>
+                </div>
+                <div style={s.card}>
+                  <span style={s.cardLabel}>Egresos</span>
+                  <span style={{ ...s.cardMonto, color: THEME.colors.danger }}>{formatMoney(totalEgresos, mon)}</span>
+                </div>
+              </div>
             </div>
-            <div style={s.card}>
-              <span style={s.cardLabel}>Ingresos</span>
-              <span style={{ ...s.cardMonto, color: THEME.colors.success }}>{formatMoney(totalIngresos, moneda)}</span>
-            </div>
-            <div style={s.card}>
-              <span style={s.cardLabel}>Egresos</span>
-              <span style={{ ...s.cardMonto, color: THEME.colors.danger }}>{formatMoney(totalEgresos, moneda)}</span>
-            </div>
-          </div>
+          ))}
 
           {/* 2-col grid: gastos por cat + últimos movs */}
           <div style={{ ...s.twoColGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
@@ -194,8 +202,13 @@ export default function Dashboard() {
                     return (
                       <div key={i} style={s.catItem}>
                         <div style={s.catRow}>
-                          <span style={s.catNombre}>{g.icono ? `${g.icono} ` : ''}{g.categoria_nombre ?? g.nombre ?? '—'}</span>
-                          <span style={s.catMonto}>{formatMoney(g.total_egresos, moneda)}</span>
+                          <span style={s.catNombre}>
+                            {g.categoria_icono || g.icono
+                              ? <CategoryIcon name={g.categoria_icono || g.icono} size={13} color="currentColor" style={{ marginRight: 6, flexShrink: 0, opacity: 0.8 }} />
+                              : null}
+                            {g.categoria_nombre ?? g.nombre ?? '—'}
+                          </span>
+                          <span style={s.catMonto}>{formatMoney(g.total_egresos, APP_CONFIG.defaultCurrency)}</span>
                         </div>
                         <div style={s.barTrack}>
                           <div style={{ ...s.barFill, width: `${pct}%`, background: THEME.colors.accent }} />
@@ -207,33 +220,29 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Últimos movimientos */}
+            {/* Gastos por subcategoría */}
             <div style={s.card}>
-              <h3 style={s.cardTitle}>Últimos movimientos</h3>
-              {ultimosMovs.length === 0 ? (
-                <span style={s.sinDatos}>Sin movimientos</span>
+              <h3 style={s.cardTitle}>Por subcategoría</h3>
+              {subcategorias.length === 0 ? (
+                <span style={s.sinDatos}>Sin datos</span>
               ) : (
-                <div style={s.movsLista}>
-                  {ultimosMovs.map((mov) => {
-                    const esIngreso = mov.tipo === 'ingreso'
-                    const color = esIngreso ? THEME.colors.success : THEME.colors.danger
-                    const signo = esIngreso ? '+' : '-'
-                    const cat = mov.categoria
-                    const catIcono = cat?.icono ?? (cat?.parent?.icono ?? '📦')
-                    const catNombre = cat
-                      ? cat.parent ? `${cat.parent.nombre} › ${cat.nombre}` : cat.nombre
-                      : '—'
-                    const fechaStr = new Date(mov.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+                <div style={s.catLista}>
+                  {subcategorias.map((g, i) => {
+                    const pct = totalGastos > 0 ? (Number(g.total_egresos) / totalGastos) * 100 : 0
                     return (
-                      <div key={mov.id} style={s.movItem}>
-                        <div style={s.movLeft}>
-                          <div style={s.movIconBox}>{catIcono}</div>
-                          <div style={s.movInfo}>
-                            <span style={s.movDesc}>{mov.descripcion || catNombre}</span>
-                            <span style={s.movMeta}>{catNombre} · {fechaStr}</span>
-                          </div>
+                      <div key={i} style={s.catItem}>
+                        <div style={s.catRow}>
+                          <span style={s.catNombre}>
+                            {g.categoria_icono || g.icono
+                              ? <CategoryIcon name={g.categoria_icono || g.icono} size={13} color="currentColor" style={{ marginRight: 6, flexShrink: 0, opacity: 0.8 }} />
+                              : null}
+                            {g.categoria_nombre}
+                          </span>
+                          <span style={s.catMonto}>{formatMoney(g.total_egresos, APP_CONFIG.defaultCurrency)}</span>
                         </div>
-                        <span style={{ ...s.movMonto, color }}>{signo}{formatMoney(mov.monto, mov.moneda)}</span>
+                        <div style={s.barTrack}>
+                          <div style={{ ...s.barFill, width: `${pct}%`, background: THEME.colors.accent }} />
+                        </div>
                       </div>
                     )
                   })}
@@ -265,6 +274,7 @@ export default function Dashboard() {
                       moneda={r.moneda}
                       tipo={r.tipo}
                       onAplicar={() => handleAplicarRec(r)}
+                      onNoAplicar={() => handleNoAplicarRec(r.id)}
                       aplicando={aplicandoId === `rec-${r.id}`}
                     />
                   ))}
@@ -283,6 +293,7 @@ export default function Dashboard() {
                       moneda={c.moneda}
                       tipo="egreso"
                       onAplicar={() => handlePagarCuota(c)}
+                      onNoAplicar={() => handleNoAplicarCuota(c.id)}
                       aplicando={aplicandoId === `cuota-${c.id}`}
                     />
                   ))}
@@ -321,10 +332,16 @@ const s = {
     borderRadius: THEME.radius.sm, transition: 'opacity 0.15s',
   },
   mesLabel: { fontSize: '16px', fontWeight: '700', color: THEME.colors.textPrimary, textTransform: 'capitalize' },
-  currToggle: { display: 'inline-flex', gap: '4px' },
-  currBtn: {
-    padding: '6px 14px', borderRadius: THEME.radius.full, fontSize: '12px',
-    cursor: 'pointer', transition: 'all 0.15s', fontFamily: THEME.font,
+  logoutBtn: {
+    background: 'transparent', border: `1px solid ${THEME.colors.cardBorder}`,
+    color: THEME.colors.danger, borderRadius: THEME.radius.sm,
+    cursor: 'pointer', padding: '6px 10px', minHeight: '44px', minWidth: '44px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    marginLeft: '8px',
+  },
+  monedaLabel: {
+    display: 'block', fontSize: '11px', fontWeight: 700, color: THEME.colors.textMuted,
+    textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', marginTop: '4px',
   },
   error: {
     marginBottom: '16px', background: THEME.colors.errorBg, color: THEME.colors.danger,
@@ -347,29 +364,10 @@ const s = {
   catLista: { display: 'flex', flexDirection: 'column', gap: '14px' },
   catItem: { display: 'flex', flexDirection: 'column', gap: '6px' },
   catRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  catNombre: { fontSize: '13px', color: THEME.colors.textPrimary, fontWeight: 500 },
+  catNombre: { fontSize: '13px', color: THEME.colors.textPrimary, fontWeight: 500, display: 'flex', alignItems: 'center' },
   catMonto: { fontSize: '12px', color: THEME.colors.textMuted },
   barTrack: { height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: '2px', transition: 'width 0.4s ease' },
-  movsLista: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  movItem: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '10px 12px', borderRadius: THEME.radius.sm,
-    background: THEME.colors.surface, cursor: 'pointer',
-  },
-  movLeft: { display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 },
-  movIconBox: {
-    width: '32px', height: '32px', borderRadius: THEME.radius.sm,
-    background: THEME.colors.accentSoft, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', fontSize: '14px', flexShrink: 0,
-  },
-  movInfo: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
-  movDesc: {
-    fontSize: '13px', fontWeight: 500, color: THEME.colors.textPrimary,
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-  },
-  movMeta: { fontSize: '11px', color: THEME.colors.textMuted },
-  movMonto: { fontSize: '13px', fontWeight: 700, flexShrink: 0, marginLeft: '8px' },
   pendCard: {
     background: THEME.colors.card, borderRadius: THEME.radius.lg,
     padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px',
@@ -398,6 +396,11 @@ const sp = {
   itemLabel: { fontSize: '13px', fontWeight: 600, color: THEME.colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   itemSub: { fontSize: '11px', color: THEME.colors.textMuted },
   itemMonto: { fontSize: '13px', fontWeight: 700, flexShrink: 0 },
+  noAplicarBtn: {
+    height: '32px', padding: '0 10px', background: 'transparent',
+    color: THEME.colors.textMuted, border: `1px solid ${THEME.colors.cardBorder}`,
+    borderRadius: THEME.radius.sm, fontSize: '12px', fontWeight: 500, cursor: 'pointer', flexShrink: 0,
+  },
   aplicarBtn: {
     height: '32px', padding: '0 12px', background: THEME.colors.accentSoft,
     color: THEME.colors.accent, border: 'none', borderRadius: THEME.radius.sm,

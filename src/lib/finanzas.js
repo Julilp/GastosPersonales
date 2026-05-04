@@ -19,6 +19,16 @@ export async function getGastosPorCategoria(mes, anio, moneda) {
   return data
 }
 
+export async function getGastosPorSubcategoria(mes, anio, moneda) {
+  const { data, error } = await supabase.rpc('get_gastos_por_subcategoria', {
+    p_mes: mes,
+    p_anio: anio,
+    p_moneda: moneda,
+  })
+  if (error) throw error
+  return data
+}
+
 export async function getMovimientos({ mes, anio, tipo, moneda, cuenta_id, search } = {}) {
   let q = supabase
     .from('movimientos')
@@ -51,6 +61,22 @@ export async function crearMovimiento(payload) {
   const { data, error } = await supabase.from('movimientos').insert(payload).select().single()
   if (error) throw error
   return data
+}
+
+export async function crearTraspaso({ origenCuentaId, origenMonto, origenMoneda, destinoCuentaId, destinoMonto, destinoMoneda, descripcion, fecha }) {
+  const traspaso_id = crypto.randomUUID()
+  const { error: e1 } = await supabase.from('movimientos').insert({
+    tipo: 'traspaso', traspaso_direccion: 'salida',
+    monto: origenMonto, moneda: origenMoneda, cuenta_id: origenCuentaId,
+    descripcion: descripcion || null, fecha, traspaso_id,
+  })
+  if (e1) throw e1
+  const { error: e2 } = await supabase.from('movimientos').insert({
+    tipo: 'traspaso', traspaso_direccion: 'entrada',
+    monto: destinoMonto, moneda: destinoMoneda, cuenta_id: destinoCuentaId,
+    descripcion: descripcion || null, fecha, traspaso_id,
+  })
+  if (e2) throw e2
 }
 
 export async function actualizarMovimiento(id, payload) {
@@ -260,6 +286,16 @@ export async function pagarCuota(cuota, mes, anio) {
 
 // ── Pendientes del mes ────────────────────────────────────────
 
+export async function omitirPendiente(tipo, referenciaId, mes, anio) {
+  const { error } = await supabase.rpc('omitir_pendiente', {
+    p_tipo: tipo,
+    p_referencia_id: referenciaId,
+    p_mes: mes,
+    p_anio: anio,
+  })
+  if (error) throw error
+}
+
 export async function getPendientesMes(mes, anio) {
   const { data, error } = await supabase.rpc('get_pendientes_mes', {
     p_mes: mes,
@@ -289,4 +325,12 @@ export function navegarMes(mes, anio, delta) {
 
 export function labelMes(mes, anio) {
   return new Date(anio, mes - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+}
+
+export async function sugerirCategoria({ descripcion, tipo, categorias }) {
+  const { data, error } = await supabase.functions.invoke('suggest-categoria', {
+    body: { descripcion, tipo, categorias },
+  })
+  if (error) throw error
+  return data
 }

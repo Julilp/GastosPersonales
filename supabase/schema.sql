@@ -33,7 +33,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE Gastos_personales.tipo_movimiento AS ENUM ('egreso', 'ingreso');
+  CREATE TYPE Gastos_personales.tipo_movimiento AS ENUM ('egreso', 'ingreso', 'traspaso');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS Gastos_personales.movimientos (
   categoria_id BIGINT                             NOT NULL REFERENCES Gastos_personales.categorias(id) ON DELETE RESTRICT,
   descripcion  TEXT,
   fecha        DATE                               NOT NULL DEFAULT CURRENT_DATE,
-  creado_en    TIMESTAMPTZ                        NOT NULL DEFAULT now()
+  creado_en    TIMESTAMPTZ                        NOT NULL DEFAULT now(),
+  traspaso_id  UUID                               DEFAULT NULL
 );
 
 -- -------------------------------------------------------------
@@ -128,6 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_movimientos_user_mes_anio  ON Gastos_personales.m
 CREATE INDEX IF NOT EXISTS idx_movimientos_cuenta_id      ON Gastos_personales.movimientos (cuenta_id);
 CREATE INDEX IF NOT EXISTS idx_movimientos_categoria_id   ON Gastos_personales.movimientos (categoria_id);
 CREATE INDEX IF NOT EXISTS idx_movimientos_moneda         ON Gastos_personales.movimientos (moneda);
+CREATE INDEX IF NOT EXISTS idx_movimientos_traspaso_id    ON Gastos_personales.movimientos (traspaso_id) WHERE traspaso_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_presupuestos_user_mes_anio ON Gastos_personales.presupuestos (user_id, mes, anio);
 CREATE INDEX IF NOT EXISTS idx_meta_ahorro_user_mes_anio  ON Gastos_personales.meta_ahorro (user_id, mes, anio);
 CREATE INDEX IF NOT EXISTS idx_categorias_parent_id       ON Gastos_personales.categorias (parent_id);
@@ -356,14 +358,15 @@ BEGIN
     c.nombre                                                      AS cuenta_nombre,
     c.tipo::TEXT                                                  AS cuenta_tipo,
     m.moneda::TEXT                                                AS moneda,
-    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'ingreso'), 0)  AS total_ingresos,
-    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'egreso'),  0)  AS total_egresos,
-    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'ingreso'), 0)
-    - COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'egreso'), 0) AS balance
+    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'ingreso'  AND m.tipo != 'traspaso'), 0)             AS total_ingresos,
+    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'egreso'   AND m.tipo != 'traspaso'), 0)             AS total_egresos,
+    COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'ingreso'  AND m.tipo != 'traspaso'), 0)
+    - COALESCE(SUM(m.monto) FILTER (WHERE m.tipo = 'egreso' AND m.tipo != 'traspaso'), 0)             AS balance
   FROM Gastos_personales.movimientos m
   JOIN Gastos_personales.cuentas c ON c.id = m.cuenta_id
   WHERE
     m.user_id = auth.uid()
+    AND m.tipo != 'traspaso'
     AND EXTRACT(MONTH FROM m.fecha)::INT = p_mes
     AND EXTRACT(YEAR  FROM m.fecha)::INT = p_anio
   GROUP BY c.id, c.nombre, c.tipo, m.moneda
