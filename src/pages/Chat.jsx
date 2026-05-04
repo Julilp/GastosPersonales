@@ -69,7 +69,7 @@ export default function Chat() {
   function nombreCategoria(categoria_id) {
     const cat = categoriasFlat.find(c => c.id === categoria_id)
     if (!cat) return '—'
-    return `${cat.icono ?? ''} ${cat.nombre}`.trim()
+    return cat.nombre
   }
 
   async function handleInterpretar() {

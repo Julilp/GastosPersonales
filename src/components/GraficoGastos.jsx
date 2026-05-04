@@ -1,6 +1,8 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { BarChart2 } from 'lucide-react'
 import { THEME } from '../config/theme'
 import { formatMoney } from '../config/app.config'
+import { CategoryIcon } from '../lib/categoryIcons'
 
 const PALETTE = [
   '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6',
@@ -12,7 +14,7 @@ function CustomTooltip({ active, payload, moneda }) {
   const item = payload[0].payload
   return (
     <div style={s.tooltip}>
-      <span style={s.tooltipIcon}>{item.categoria_icono}</span>
+      <span style={s.tooltipIcon}><CategoryIcon name={item.categoria_icono ?? 'package'} size={18} /></span>
       <span style={s.tooltipName}>{item.categoria_nombre}</span>
       <span style={s.tooltipMonto}>{formatMoney(item.total_egresos, moneda)}</span>
       <span style={s.tooltipPct}>{Number(item.porcentaje).toFixed(1)}%</span>
@@ -26,7 +28,7 @@ function CustomLegend({ payload }) {
       {payload.map((entry, i) => (
         <li key={i} style={s.legendItem}>
           <span style={{ ...s.legendDot, background: entry.color }} />
-          <span style={s.legendIcon}>{entry.payload.categoria_icono}</span>
+          <span style={s.legendIcon}><CategoryIcon name={entry.payload.categoria_icono ?? 'package'} size={13} /></span>
           <span style={s.legendLabel}>{entry.payload.categoria_nombre}</span>
           <span style={s.legendPct}>{Number(entry.payload.porcentaje).toFixed(0)}%</span>
         </li>
@@ -39,7 +41,7 @@ export default function GraficoGastos({ datos = [], moneda = 'ARS' }) {
   if (!datos.length) {
     return (
       <div style={s.empty}>
-        <span style={s.emptyIcon}>📊</span>
+        <BarChart2 size={40} color={THEME.colors.textMuted} strokeWidth={1.2} style={{ opacity: 0.4 }} />
         <span style={s.emptyText}>Sin gastos en este período</span>
       </div>
     )
@@ -108,8 +110,8 @@ const s = {
     minWidth: '140px',
   },
   tooltipIcon: {
-    fontSize: '20px',
-    lineHeight: 1,
+    display: 'flex', alignItems: 'center',
+    color: THEME.colors.textSecondary,
   },
   tooltipName: {
     fontSize: '13px',
@@ -147,8 +149,8 @@ const s = {
     flexShrink: 0,
   },
   legendIcon: {
-    fontSize: '14px',
-    lineHeight: 1,
+    display: 'flex', alignItems: 'center',
+    color: THEME.colors.textSecondary,
   },
   legendLabel: {
     fontSize: '13px',

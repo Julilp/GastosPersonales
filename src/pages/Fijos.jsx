@@ -7,6 +7,7 @@ import {
   getCuentas, getCategorias,
 } from '../lib/finanzas'
 import { Repeat2, CreditCard, Trash2, PauseCircle, PlayCircle, ArrowDownRight, ArrowUpRight, X, Plus } from 'lucide-react'
+import { CategoryIcon } from '../lib/categoryIcons'
 
 function FormRecurrente({ cuentas, categorias, inicial, onGuardar, onCancelar, loading }) {
   const [tipo, setTipo] = useState(inicial?.tipo ?? 'egreso')
@@ -19,8 +20,8 @@ function FormRecurrente({ cuentas, categorias, inicial, onGuardar, onCancelar, l
   const [error, setError] = useState('')
 
   const opsCat = categorias.flatMap(c => [
-    { id: c.id, label: `${c.icono} ${c.nombre}` },
-    ...(c.subcategorias ?? []).map(s => ({ id: s.id, label: `  ${s.icono ?? ''} ${s.nombre}` })),
+    { id: c.id, label: c.nombre },
+    ...(c.subcategorias ?? []).map(s => ({ id: s.id, label: `  ${s.nombre}` })),
   ])
 
   function submit(e) {
@@ -111,8 +112,8 @@ function FormCuota({ cuentas, categorias, onGuardar, onCancelar, loading }) {
   const [error, setError] = useState('')
 
   const opsCat = categorias.flatMap(c => [
-    { id: c.id, label: `${c.icono} ${c.nombre}` },
-    ...(c.subcategorias ?? []).map(s => ({ id: s.id, label: `  ${s.icono ?? ''} ${s.nombre}` })),
+    { id: c.id, label: c.nombre },
+    ...(c.subcategorias ?? []).map(s => ({ id: s.id, label: `  ${s.nombre}` })),
   ])
 
   function submit(e) {
@@ -358,7 +359,7 @@ export default function Fijos() {
                   style={{ ...s.item, animation: 'fadeIn 0.25s ease both', animationDelay: `${i * 0.05}s` }}
                 >
                   <div style={s.itemLeft}>
-                    <span style={s.itemIcono}>{r.categoria?.icono ?? '📦'}</span>
+                    <div style={s.itemIcono}><CategoryIcon name={r.categoria?.icono ?? 'package'} size={20} /></div>
                     <div style={s.itemInfo}>
                       <span style={s.itemNombre}>{r.descripcion}</span>
                       <span style={s.itemMeta}>Mensual · día {r.dia_del_mes}</span>
@@ -405,7 +406,7 @@ export default function Fijos() {
                   style={{ ...s.item, animation: 'fadeIn 0.25s ease both', animationDelay: `${i * 0.05}s` }}
                 >
                   <div style={s.itemLeft}>
-                    <span style={s.itemIcono}>{c.categoria?.icono ?? '📦'}</span>
+                    <div style={s.itemIcono}><CategoryIcon name={c.categoria?.icono ?? 'package'} size={20} /></div>
                     <div style={s.itemInfo}>
                       <span style={s.itemNombre}>{c.descripcion}</span>
                       <span style={s.itemMeta}>Cuota {c.cuotas_pagadas + 1}/{c.cantidad_cuotas}</span>
@@ -479,7 +480,7 @@ const s = {
     background: THEME.colors.card, border: `1px solid ${THEME.colors.cardBorder}`,
   },
   itemLeft: { display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 },
-  itemIcono: { fontSize: '22px', lineHeight: 1, flexShrink: 0 },
+  itemIcono: { width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: THEME.colors.textSecondary },
   itemInfo: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
   itemNombre: {
     fontSize: '13px', fontWeight: 500, color: THEME.colors.textPrimary,

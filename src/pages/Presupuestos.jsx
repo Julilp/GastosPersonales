@@ -22,10 +22,10 @@ function ModalPresupuesto({ categorias, presupuestoExistente, mes, anio, moneda,
   const [error, setError] = useState('')
 
   const opciones = categorias.flatMap(cat => {
-    const items = [{ id: cat.id, label: `${cat.icono} ${cat.nombre}` }]
+    const items = [{ id: cat.id, label: cat.nombre }]
     if (cat.subcategorias?.length) {
       cat.subcategorias.forEach(sub => {
-        items.push({ id: sub.id, label: `  ${sub.icono ?? ''} ${sub.nombre}` })
+        items.push({ id: sub.id, label: `  ${sub.nombre}` })
       })
     }
     return items

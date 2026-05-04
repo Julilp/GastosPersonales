@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react'
 import { THEME } from '../config/theme'
 import { getCategorias, crearCategoria, eliminarCategoria } from '../lib/finanzas'
 import { Plus, X, Trash2, Tag, ChevronDown, ChevronUp } from 'lucide-react'
+import { CategoryIcon } from '../lib/categoryIcons'
 
 const ICONOS_SUGERIDOS = [
-  '🍔','🛒','🚗','🏠','💊','📚','🎬','✈️','👗','💪',
-  '🐾','🎮','💰','🍺','☕','🎵','💡','📱','🧴','🎁',
+  'utensils','shopping-cart','car','home','pill','book','tv','plane',
+  'shirt','dumbbell','dog','smartphone','wallet','lightbulb','music',
+  'coffee','wine','gift','wrench','activity',
 ]
 
 function FormCategoria({ categorias, onGuardar, onCancelar, loading }) {
   const [nombre, setNombre] = useState('')
-  const [icono, setIcono] = useState('📦')
+  const [icono, setIcono] = useState('package')
   const [parentId, setParentId] = useState('')
   const [iconoCustom, setIconoCustom] = useState('')
 
@@ -55,9 +57,10 @@ function FormCategoria({ categorias, onGuardar, onCancelar, loading }) {
                 ...s.iconoBtn,
                 background: icono === em && !iconoCustom ? THEME.colors.primaryLight : THEME.colors.bg,
                 border: `2px solid ${icono === em && !iconoCustom ? THEME.colors.primary : THEME.colors.border}`,
+                color: icono === em && !iconoCustom ? THEME.colors.primary : THEME.colors.textSecondary,
               }}
             >
-              {em}
+              <CategoryIcon name={em} size={18} />
             </button>
           ))}
         </div>
@@ -70,7 +73,7 @@ function FormCategoria({ categorias, onGuardar, onCancelar, loading }) {
           maxLength={4}
         />
         <div style={s.iconoPreview}>
-          Previsualización: <span style={s.iconoPreviewEm}>{iconoActual}</span> {nombre || 'Categoría'}
+          Previsualización: <span style={s.iconoPreviewEm}><CategoryIcon name={iconoCustom || iconoActual || 'package'} size={18} /></span> {nombre || 'Categoría'}
         </div>
       </div>
 
@@ -83,7 +86,7 @@ function FormCategoria({ categorias, onGuardar, onCancelar, loading }) {
         >
           <option value="">Ninguna (categoría raíz)</option>
           {categorias.filter(c => !c.parent_id).map(c => (
-            <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>
+            <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}
         </select>
       </div>
@@ -106,7 +109,7 @@ function ItemCategoria({ cat, onEliminar }) {
   return (
     <div style={s.catCard}>
       <div style={s.catRow}>
-        <span style={s.catIcono}>{cat.icono ?? '📦'}</span>
+        <span style={s.catIcono}><CategoryIcon name={cat.icono ?? 'package'} size={22} /></span>
         <div style={s.catInfo}>
           <span style={s.catNombre}>{cat.nombre}</span>
           {esDefault && <span style={s.badge}>Default</span>}
@@ -140,7 +143,7 @@ function ItemCategoria({ cat, onEliminar }) {
         <div style={s.subList}>
           {cat.subcategorias.map(sub => (
             <div key={sub.id} style={s.subItem}>
-              <span style={s.subIcono}>{sub.icono ?? '  '}</span>
+              <span style={s.subIcono}><CategoryIcon name={sub.icono ?? 'package'} size={14} /></span>
               <span style={s.subNombre}>{sub.nombre}</span>
               {sub.es_default && <span style={s.badgeSm}>Default</span>}
               {!sub.es_default && (
@@ -267,7 +270,7 @@ export default function Categorias() {
           <div style={s.confirmSheet}>
             <h3 style={s.confirmTitle}>Eliminar categoría</h3>
             <p style={s.confirmText}>
-              ¿Eliminás la categoría <strong>{confirmEliminar.icono} {confirmEliminar.nombre}</strong>?
+              ¿Eliminás la categoría <strong><CategoryIcon name={confirmEliminar.icono ?? 'package'} size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> {confirmEliminar.nombre}</strong>?
               No se puede eliminar si tiene movimientos asociados.
             </p>
             <div style={s.confirmActions}>
@@ -471,9 +474,10 @@ const s = {
     minHeight: '64px',
   },
   catIcono: {
-    fontSize: '26px',
-    lineHeight: 1,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '32px', height: '32px',
     flexShrink: 0,
+    color: THEME.colors.textSecondary,
     width: '32px',
     textAlign: 'center',
   },
@@ -574,9 +578,9 @@ const s = {
     borderBottom: `1px solid ${THEME.colors.border}`,
   },
   subIcono: {
-    fontSize: '18px',
-    lineHeight: 1,
-    width: '24px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '20px', height: '20px',
+    color: THEME.colors.textMuted,
     textAlign: 'center',
     flexShrink: 0,
   },
