@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { THEME } from '../config/theme'
 import { APP_CONFIG, formatMoney } from '../config/app.config'
 import {
@@ -6,6 +6,9 @@ import {
   getGastosPorCategoria,
   getGastosPorSubcategoria,
   getPendientesMes,
+  getPresupuestos,
+  getRecurrentes,
+  getCuotas,
   omitirPendiente,
   aplicarRecurrente,
   pagarCuota,
@@ -15,8 +18,175 @@ import {
 } from '../lib/finanzas'
 import ModalMovimiento from '../components/ModalMovimiento'
 import { CategoryIcon } from '../lib/categoryIcons'
-import { Clock, ChevronLeft, ChevronRight, Plus, LogOut } from 'lucide-react'
+import { Clock, ChevronLeft, ChevronRight, Plus, LogOut, Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { getEraInsights, INSIGHT_CONFIG, PRIORITY_ORDER, sortInsights, getScoreColor, getScoreLabel } from '../lib/eraContext'
+
+// ─── ERA Context Insights Panel ──────────────────────────────────────────────
+
+function InsightsERA({ resumen, gastos, subcategorias, presupuestos, recurrentes, cuotas, mes, anio }) {
+  const [insights, setInsights] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [expanded, setExpanded] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  const cargar = useCallback(async () => {
+    if (!resumen || resumen.length === 0) return
+    setLoading(true)
+    setError('')
+    try {
+      const data = await getEraInsights({ resumen, gastos, subcategorias, presupuestos, recurrentes, cuotas, mes, anio })
+      setInsights(data)
+      setHasLoaded(true)
+    } catch (e) {
+      setError('No se pudieron cargar los insights.')
+    }
+    setLoading(false)
+  }, [resumen, gastos, subcategorias, presupuestos, recurrentes, cuotas, mes, anio])
+
+  useEffect(() => {
+    if (!hasLoaded && resumen && resumen.length > 0) {
+      cargar()
+    }
+  }, [resumen])
+
+  const insightsSorted = insights ? sortInsights(insights.insights ?? []) : []
+
+  return (
+    <div style={si.card}>
+      <div style={si.header} onClick={() => setExpanded(e => !e)}>
+        <div style={si.headerLeft}>
+          <Sparkles size={16} color={THEME.colors.accent} />
+          <span style={si.title}>Insights ERA</span>
+          {insights?.score_financiero != null && (
+            <span style={{
+              ...si.scoreBadge,
+              background: getScoreColor(insights.score_financiero) + '22',
+              color: getScoreColor(insights.score_financiero),
+            }}>
+              {insights.score_financiero}/100 · {getScoreLabel(insights.score_financiero)}
+            </span>
+          )}
+        </div>
+        <div style={si.headerRight}>
+          {hasLoaded && (
+            <button
+              onClick={e => { e.stopPropagation(); cargar() }}
+              style={si.refreshBtn}
+              disabled={loading}
+              title="Actualizar insights"
+            >
+              <RefreshCw size={13} style={{ animation: loading ? 'spin 0.7s linear infinite' : 'none' }} />
+            </button>
+          )}
+          {expanded ? <ChevronUp size={16} color={THEME.colors.textMuted} /> : <ChevronDown size={16} color={THEME.colors.textMuted} />}
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={si.body}>
+          {loading && !hasLoaded && (
+            <div style={si.loadingRow}>
+              <RefreshCw size={14} style={{ animation: 'spin 0.7s linear infinite', color: THEME.colors.accent }} />
+              <span style={si.loadingText}>Analizando tus finanzas con IA...</span>
+            </div>
+          )}
+
+          {error && !loading && (
+            <span style={si.errorText}>{error}</span>
+          )}
+
+          {!hasLoaded && !loading && !error && (
+            <div style={si.emptyState}>
+              <span style={si.emptyText}>Registrá movimientos para ver insights personalizados.</span>
+            </div>
+          )}
+
+          {insights && (
+            <>
+              {insights.resumen_ejecutivo && (
+                <p style={si.resumen}>{insights.resumen_ejecutivo}</p>
+              )}
+              <div style={si.insightsList}>
+                {insightsSorted.map((insight, i) => {
+                  const config = INSIGHT_CONFIG[insight.tipo] ?? INSIGHT_CONFIG.consejo
+                  return (
+                    <div key={i} style={{ ...si.insightItem, background: config.bg, borderLeft: `3px solid ${config.color}` }}>
+                      <div style={si.insightTop}>
+                        <span style={si.insightEmoji}>{config.emoji}</span>
+                        <span style={{ ...si.insightTipo, color: config.color }}>{config.label}</span>
+                        {insight.valor && (
+                          <span style={{ ...si.insightValor, color: config.color }}>{insight.valor}</span>
+                        )}
+                        <span style={{ ...si.prioridadBadge, opacity: insight.prioridad === 'alta' ? 1 : 0.6 }}>
+                          {insight.prioridad === 'alta' ? '●' : insight.prioridad === 'media' ? '◐' : '○'}
+                        </span>
+                      </div>
+                      <p style={si.insightTitulo}>{insight.titulo}</p>
+                      <p style={si.insightDesc}>{insight.descripcion}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const si = {
+  card: {
+    background: THEME.colors.card,
+    border: `1px solid ${THEME.colors.accent}44`,
+    borderRadius: THEME.radius.lg,
+    marginBottom: '16px',
+    overflow: 'hidden',
+  },
+  header: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '14px 16px', cursor: 'pointer',
+    borderBottom: `1px solid ${THEME.colors.cardBorder}`,
+  },
+  headerLeft: { display: 'flex', alignItems: 'center', gap: '8px', flex: 1 },
+  headerRight: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
+  title: { fontSize: '14px', fontWeight: 600, color: THEME.colors.textPrimary },
+  scoreBadge: {
+    fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+    borderRadius: '9999px', letterSpacing: '0.3px',
+  },
+  refreshBtn: {
+    background: 'none', border: 'none', color: THEME.colors.textMuted,
+    cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center',
+    borderRadius: THEME.radius.sm,
+  },
+  body: { padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  loadingRow: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0' },
+  loadingText: { fontSize: '13px', color: THEME.colors.textMuted },
+  errorText: { fontSize: '13px', color: THEME.colors.danger },
+  emptyState: { padding: '8px 0' },
+  emptyText: { fontSize: '13px', color: THEME.colors.textMuted },
+  resumen: {
+    margin: '0 0 8px', fontSize: '13px', color: THEME.colors.textMuted,
+    fontStyle: 'italic', lineHeight: '1.5',
+  },
+  insightsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  insightItem: {
+    borderRadius: THEME.radius.sm, padding: '10px 12px',
+    display: 'flex', flexDirection: 'column', gap: '4px',
+  },
+  insightTop: { display: 'flex', alignItems: 'center', gap: '6px' },
+  insightEmoji: { fontSize: '13px', lineHeight: 1 },
+  insightTipo: { fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  insightValor: { fontSize: '11px', fontWeight: 700, marginLeft: 'auto' },
+  prioridadBadge: { fontSize: '11px', color: THEME.colors.textMuted, marginLeft: '2px' },
+  insightTitulo: { margin: 0, fontSize: '13px', fontWeight: 600, color: THEME.colors.textPrimary },
+  insightDesc: { margin: 0, fontSize: '12px', color: THEME.colors.textMuted, lineHeight: '1.5' },
+}
+
+// ─── Pendiente Item ───────────────────────────────────────────────────────────
 
 function PendienteItem({ label, sub, monto, moneda, tipo, onAplicar, onNoAplicar, aplicando }) {
   const color = tipo === 'ingreso' ? THEME.colors.success : THEME.colors.danger
@@ -46,6 +216,9 @@ export default function Dashboard() {
   const [gastos, setGastos] = useState([])
   const [subcategorias, setSubcategorias] = useState([])
   const [pendientes, setPendientes] = useState({ recurrentes_pendientes: [], cuotas_pendientes: [] })
+  const [presupuestos, setPresupuestos] = useState([])
+  const [recurrentes, setRecurrentes] = useState([])
+  const [cuotas, setCuotas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -59,16 +232,22 @@ export default function Dashboard() {
     setLoading(true)
     setError('')
     try {
-      const [r, g, p, sub] = await Promise.all([
+      const [r, g, p, sub, pres, rec, cuot] = await Promise.all([
         getResumenMes(mes, anio),
         getGastosPorCategoria(mes, anio, APP_CONFIG.defaultCurrency),
         getPendientesMes(mes, anio),
         getGastosPorSubcategoria(mes, anio, APP_CONFIG.defaultCurrency),
+        getPresupuestos(mes, anio),
+        getRecurrentes(),
+        getCuotas(),
       ])
       setResumen(r)
       setGastos(g)
       setPendientes(p)
       setSubcategorias(sub ?? [])
+      setPresupuestos(pres ?? [])
+      setRecurrentes(rec ?? [])
+      setCuotas(cuot ?? [])
     } catch (e) {
       setError(e.message)
     }
@@ -187,6 +366,18 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+
+          {/* ERA Context Insights */}
+          <InsightsERA
+            resumen={resumen}
+            gastos={gastos}
+            subcategorias={subcategorias}
+            presupuestos={presupuestos}
+            recurrentes={recurrentes}
+            cuotas={cuotas}
+            mes={mes}
+            anio={anio}
+          />
 
           {/* 2-col grid: gastos por cat + últimos movs */}
           <div style={{ ...s.twoColGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>

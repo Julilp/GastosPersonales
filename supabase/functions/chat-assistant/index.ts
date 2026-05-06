@@ -10,7 +10,7 @@ const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Intent = 'finanzas' | 'calendario_crear' | 'calendario_ver' | 'calendario_borrar' | 'chat'
+type Intent = 'finanzas' | 'calendario_crear' | 'calendario_ver' | 'calendario_borrar' | 'era_insights' | 'chat'
 
 interface MovimientoParseado {
   tipo: 'egreso' | 'ingreso'
@@ -46,11 +46,27 @@ interface AssistantResponse {
   eventos?: CalendarEvent[]
 }
 
+interface ResumenMoneda {
+  moneda: string
+  total_ingresos: number
+  total_egresos: number
+  balance: number
+}
+
+interface GastoCategoria {
+  categoria_nombre: string
+  total_egresos: number
+}
+
 interface RequestBody {
   texto: string
   categorias: unknown[]
   cuentas: unknown[]
   fecha_hoy: string
+  resumen?: ResumenMoneda[]
+  gastos?: GastoCategoria[]
+  presupuestos?: unknown[]
+  nombre_usuario?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -64,6 +80,35 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ error: message }, status)
+}
+
+function formatARS(n: number): string {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+}
+
+function buildFinancialContext(resumen: ResumenMoneda[] | undefined, gastos: GastoCategoria[] | undefined, fechaHoy: string): string {
+  if (!resumen || resumen.length === 0) return ''
+
+  const arsData = resumen.find(r => r.moneda === 'ARS')
+  const usdData = resumen.find(r => r.moneda === 'USD')
+
+  const ingresosARS = arsData ? Number(arsData.total_ingresos) : 0
+  const egresosARS = arsData ? Number(arsData.total_egresos) : 0
+  const balanceARS = arsData ? Number(arsData.balance) : 0
+  const tasaAhorro = ingresosARS > 0 ? ((ingresosARS - egresosARS) / ingresosARS * 100).toFixed(1) : null
+
+  const mes = new Date(fechaHoy).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+  const topGastos = (gastos ?? []).slice(0, 5).map(g => `${g.categoria_nombre}: ${formatARS(Number(g.total_egresos))}`)
+
+  return `
+DATOS FINANCIEROS REALES DEL USUARIO (${mes.toUpperCase()}):
+- Ingresos ARS: ${formatARS(ingresosARS)}
+- Egresos ARS: ${formatARS(egresosARS)}
+- Balance ARS: ${formatARS(balanceARS)}${tasaAhorro ? `\n- Tasa de ahorro: ${tasaAhorro}%` : ''}
+${usdData && (Number(usdData.total_ingresos) > 0 || Number(usdData.total_egresos) > 0)
+  ? `- Ingresos USD: U$D${Number(usdData.total_ingresos).toLocaleString('es-AR')}\n- Egresos USD: U$D${Number(usdData.total_egresos).toLocaleString('es-AR')}`
+  : ''}
+${topGastos.length > 0 ? `- Top categorías de gasto:\n  ${topGastos.join('\n  ')}` : ''}`
 }
 
 // ─── Claude helper ───────────────────────────────────────────────────────────
@@ -173,14 +218,15 @@ Clasificá el mensaje del usuario en UNO de estos intents. Respondé ÚNICAMENTE
 - "calendario_crear" → el usuario quiere crear, agendar, añadir o recordar un evento, reunión, cita, turno, etc.
 - "calendario_ver" → el usuario quiere ver, consultar o listar sus eventos, agenda, qué tiene pendiente, etc.
 - "calendario_borrar" → el usuario quiere borrar, eliminar o cancelar un evento de su agenda
-- "chat" → consultas generales, preguntas sobre su situación financiera, saludos, o cualquier cosa que no encaje en los anteriores
+- "era_insights" → el usuario pregunta sobre SU situación financiera, análisis, comparaciones, proyecciones, consejos sobre sus datos: "cuánto gasté", "cómo voy", "analiza mis gastos", "en qué gasto más", "tasa de ahorro", "presupuesto", "consejo financiero", "cómo estoy este mes"
+- "chat" → saludos, preguntas generales no financieras, o cualquier cosa que no encaje en los anteriores
 
-Respondé SOLO con una de estas palabras: finanzas, calendario_crear, calendario_ver, calendario_borrar, chat`
+Respondé SOLO con una de estas palabras: finanzas, calendario_crear, calendario_ver, calendario_borrar, era_insights, chat`
 
   const raw = await callClaude(apiKey, systemPrompt, texto, 20)
   const intent = raw.trim().toLowerCase() as Intent
 
-  const validos: Intent[] = ['finanzas', 'calendario_crear', 'calendario_ver', 'calendario_borrar', 'chat']
+  const validos: Intent[] = ['finanzas', 'calendario_crear', 'calendario_ver', 'calendario_borrar', 'era_insights', 'chat']
   return validos.includes(intent) ? intent : 'chat'
 }
 
@@ -227,6 +273,39 @@ Devuelve UNICAMENTE un JSON valido sin texto adicional:
   }
 }
 
+async function handleEraInsights(
+  apiKey: string,
+  texto: string,
+  resumen: ResumenMoneda[] | undefined,
+  gastos: GastoCategoria[] | undefined,
+  presupuestos: unknown[] | undefined,
+  fechaHoy: string,
+  nombreUsuario: string,
+): Promise<AssistantResponse> {
+  const contextFinanciero = buildFinancialContext(resumen, gastos, fechaHoy)
+
+  const systemPrompt = `Sos un asesor financiero personal experto para argentinos llamado ERA. Tenés acceso a los datos financieros REALES del usuario y respondés preguntas sobre su situación económica con información concreta y accionable.
+
+Fecha de hoy: ${fechaHoy}
+Usuario: ${nombreUsuario}
+${contextFinanciero}
+
+Reglas:
+- Siempre referenciá los números reales del usuario en tu respuesta
+- Sé directo, útil y conciso (máximo 4 oraciones)
+- Usá español argentino informal
+- Si el usuario pregunta algo que no está en los datos, decíselo honestamente
+- Podés hacer cálculos simples con los datos disponibles (ej: cuánto queda del mes, proyecciones)
+- Formatéa los montos en ARS con $ y puntos de miles`
+
+  const mensaje = await callClaude(apiKey, systemPrompt, texto, 768)
+
+  return {
+    intent: 'era_insights',
+    mensaje: mensaje.trim(),
+  }
+}
+
 async function crearEventoGoogle(accessToken: string, eventoDatos: EventoDatos): Promise<string> {
   const eventBody = {
     summary: eventoDatos.summary,
@@ -251,23 +330,21 @@ async function crearEventoGoogle(accessToken: string, eventoDatos: EventoDatos):
 
 interface EventoPatron {
   tipo: 'unico' | 'recurrente'
-  // único
   summary?: string
   description?: string | null
   location?: string | null
   start_datetime?: string
   end_datetime?: string
-  // recurrente
   ocurrencias?: Array<{
     summary: string
     description?: string | null
     location?: string | null
-    day_of_week: number  // 0=domingo, 1=lunes, ..., 6=sábado
-    start_time: string   // "HH:MM"
-    end_time: string     // "HH:MM"
+    day_of_week: number
+    start_time: string
+    end_time: string
   }>
   semanas?: number
-  fecha_inicio?: string  // YYYY-MM-DD
+  fecha_inicio?: string
 }
 
 function generarFechasRecurrentes(
@@ -279,7 +356,6 @@ function generarFechasRecurrentes(
 ): Array<{ start: Date; end: Date }> {
   const resultados: Array<{ start: Date; end: Date }> = []
   const cursor = new Date(fechaInicio)
-  // Avanzar hasta el primer día de semana correcto
   while (cursor.getDay() !== dayOfWeek) {
     cursor.setDate(cursor.getDate() + 1)
   }
@@ -355,7 +431,6 @@ Reglas:
     }
   }
 
-  // Recurrente
   if (!patron.ocurrencias?.length) throw new Error('No pude interpretar los eventos recurrentes.')
   const semanas = patron.semanas ?? 8
   const fechaInicio = new Date(patron.fecha_inicio ?? fechaHoy)
@@ -392,7 +467,6 @@ async function handleCalendarioVer(
   texto: string,
   fechaHoy: string,
 ): Promise<AssistantResponse> {
-  // 1. Determinar el rango de fechas con Claude
   const systemPrompt = `Sos un asistente personal argentino. El usuario quiere ver eventos de su Google Calendar.
 Fecha de hoy: ${fechaHoy}
 
@@ -415,7 +489,6 @@ Reglas:
   try {
     rango = extractJson(raw) as { time_min: string; time_max: string }
   } catch {
-    // Fallback: próximos 7 días
     const desde = new Date(fechaHoy)
     const hasta = new Date(fechaHoy)
     hasta.setDate(hasta.getDate() + 7)
@@ -425,7 +498,6 @@ Reglas:
     }
   }
 
-  // 2. Consultar Google Calendar
   const accessToken = await getGoogleAccessToken()
 
   const params = new URLSearchParams({
@@ -497,7 +569,6 @@ async function handleCalendarioBorrar(
   texto: string,
   fechaHoy: string,
 ): Promise<AssistantResponse> {
-  // 1. Extraer qué evento borrar
   const systemPrompt = `Sos un asistente personal argentino. El usuario quiere borrar un evento de Google Calendar.
 Fecha de hoy: ${fechaHoy}
 
@@ -516,7 +587,6 @@ Si el usuario dice "el turno del dentista del viernes", query = "dentista" y fec
     throw new Error('No entendí qué evento querés borrar. Especificá el nombre o fecha.')
   }
 
-  // 2. Buscar eventos en un rango amplio
   const accessToken = await getGoogleAccessToken()
 
   const desde = busqueda.fecha
@@ -555,7 +625,6 @@ Si el usuario dice "el turno del dentista del viernes", query = "dentista" y fec
     }
   }
 
-  // Borrar el primer evento encontrado
   const eventoABorrar = items[0] as { id: string; summary?: string; start?: { dateTime?: string; date?: string } }
 
   const deleteRes = await fetch(
@@ -592,14 +661,22 @@ async function handleChat(
   apiKey: string,
   texto: string,
   fechaHoy: string,
+  resumen?: ResumenMoneda[],
+  gastos?: GastoCategoria[],
+  nombreUsuario?: string,
 ): Promise<AssistantResponse> {
-  const systemPrompt = `Sos un asistente personal amigable de finanzas para un argentino.
+  const contextFinanciero = buildFinancialContext(resumen, gastos, fechaHoy)
+  const nombre = nombreUsuario ?? 'vos'
+
+  const systemPrompt = `Sos un asistente personal amigable de finanzas para ${nombre}, un argentino.
 Fecha de hoy: ${fechaHoy}
+${contextFinanciero}
 
 Respondé de forma concisa y útil. Podés:
 - Dar consejos sobre finanzas personales
 - Responder preguntas generales
-- Guiar al usuario sobre cómo usar el asistente (registrar gastos en texto libre, consultar agenda, etc.)
+- Guiar al usuario sobre cómo usar el asistente (registrar gastos en texto libre, consultar agenda, analizar gastos con ERA, etc.)
+- Si el usuario pregunta sobre sus datos financieros, usá el contexto financiero disponible
 
 Usá español argentino informal. Máximo 3-4 oraciones.`
 
@@ -630,14 +707,13 @@ Deno.serve(async (req) => {
     return errorResponse('Body inválido')
   }
 
-  const { texto, categorias, cuentas, fecha_hoy } = body
+  const { texto, categorias, cuentas, fecha_hoy, resumen, gastos, presupuestos, nombre_usuario } = body
 
   if (!texto || !categorias || !cuentas || !fecha_hoy) {
     return errorResponse('Faltan campos requeridos: texto, categorias, cuentas, fecha_hoy')
   }
 
   try {
-    // Clasificar intent
     const intent = await clasificarIntent(apiKey, texto, fecha_hoy)
 
     let resultado: AssistantResponse
@@ -645,6 +721,13 @@ Deno.serve(async (req) => {
     switch (intent) {
       case 'finanzas':
         resultado = await handleFinanzas(apiKey, texto, categorias, cuentas, fecha_hoy)
+        break
+
+      case 'era_insights':
+        resultado = await handleEraInsights(
+          apiKey, texto, resumen, gastos, presupuestos, fecha_hoy,
+          nombre_usuario ?? 'Julian',
+        )
         break
 
       case 'calendario_crear':
@@ -661,7 +744,7 @@ Deno.serve(async (req) => {
 
       case 'chat':
       default:
-        resultado = await handleChat(apiKey, texto, fecha_hoy)
+        resultado = await handleChat(apiKey, texto, fecha_hoy, resumen, gastos, nombre_usuario)
         break
     }
 
